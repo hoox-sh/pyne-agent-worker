@@ -2,7 +2,7 @@
   "name": "pyne-agent-worker",
   "version": "0.1.2",
   "private": true,
-  "description": "Cloudflare® Workers AI agent that writes Pine Script™ via natural language, with a RAG knowledge base (v5/v6 docs + open corpus). AXIS sister plugin for the HOOX stack.",
+  "description": "Cloudflare® Workers AI agent that writes PYNE scripts via natural language, with optional RAG. AXIS sister plugin for the HOOX stack.",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "author": "jango-blockchained (hoox-sh)",

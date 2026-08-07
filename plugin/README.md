@@ -1,4 +1,4 @@
-# AXIS plugin — Pine Script™ Agent
+# AXIS plugin — PYNE Agent
 
 ES module for the AXIS charting PWA (`pynescript.axis.plugins.v1`).
 
@@ -24,7 +24,7 @@ https://<your-worker>.workers.dev/plugin/axis-pine-agent.js
 
 - **kind:** `component`
 - **slots:** `manager-tab`, `topbar-action`, `settings-section`
-- **Fallback:** floating “Pine™ Agent” button if AXIS has not mounted component slots yet
+- **Fallback:** floating “PYNE Agent” button if AXIS has not mounted component slots yet
 
 If your AXIS build’s dynamic loader still rejects `kind: 'component'`, use the
 Worker’s built-in chat UI (`https://<worker>/`) or register the module from a

@@ -46,7 +46,7 @@ bun run dev
 ## Standalone first
 
 **pyne-worker is optional.** Default `wrangler.jsonc` has no `services` binding.
-Users who do not run the HOOX stack still get full NL → Pine chat (AI + optional RAG).
+Users who do not run the HOOX stack still get full NL → PYNE Agent chat (AI + optional RAG).
 
 ## Validate loop (optional)
 

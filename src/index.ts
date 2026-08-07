@@ -4,7 +4,7 @@
 /**
  * pyne-agent-worker — Cloudflare® Worker
  *
- * Natural-language Pine Script™ coding agent for AXIS / HOOX / PYNE.
+ * Natural-language PYNE coding agent for AXIS / HOOX / PYNE.
  * Uses Workers AI™ + Vectorize™ RAG over operator-ingested v5/v6 docs,
  * open corpus (≤1000), and operator-supplied built-in references.
  *

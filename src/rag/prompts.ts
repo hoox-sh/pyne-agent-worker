@@ -5,7 +5,7 @@ import { MARKS, DISCLAIMER_SHORT } from "../lib/legal";
 import type { RagChunk } from "./retrieve";
 
 /**
- * System prompt for the Pine Script™ coding agent.
+ * System prompt for the PYNE coding agent.
  * Always references legal marks; never claims TV platform bit-parity.
  */
 export function buildSystemPrompt(opts?: {

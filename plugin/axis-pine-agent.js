@@ -1,7 +1,7 @@
 // Copyright (c) 2026 HOOX · PYNE · jango-blockchained
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// AXIS dynamic plugin — Pine Script™ natural-language agent (Cloudflare® Worker).
+// AXIS dynamic plugin — PYNE natural-language agent (Cloudflare® Worker).
 //
 // Install in AXIS → Manager → Plugins → Install from URL:
 //   https://<your-worker>/plugin/axis-pine-agent.js
@@ -130,14 +130,14 @@ function mountChat(el, api, config) {
   root.innerHTML = `
     <div class="pyne-agent-header">
       <div>
-        <h3>Pine Script™ Agent</h3>
+        <h3>PYNE Agent</h3>
         <small>Cloudflare® Workers AI™ · AXIS plugin</small>
       </div>
       <small class="pyne-agent-status">ready</small>
     </div>
     <div class="pyne-agent-msgs" data-msgs></div>
     <form class="pyne-agent-form" data-form>
-      <textarea data-input placeholder="Ask in natural language… e.g. RSI divergence strategy with ATR stops (Pine Script™ v6)"></textarea>
+      <textarea data-input placeholder="Ask in natural language… e.g. RSI divergence strategy with ATR stops (v6)"></textarea>
       <button type="submit" data-send>Send</button>
     </form>
     <div class="pyne-agent-legal">
@@ -200,7 +200,7 @@ function mountChat(el, api, config) {
 
   addMsg(
     "assistant",
-    "Hi — describe the indicator or strategy you want in plain language. I use a private Pine Script™ knowledge base (v5/v6 docs + open corpus) on Cloudflare®. I do not ship TradingView® built-in sources."
+    "Hi — describe the indicator or strategy you want in plain language. I use a private PYNE knowledge base (v5/v6 docs + open corpus) on Cloudflare®. I do not ship TradingView® built-in sources."
   );
 
   form.addEventListener("submit", async (ev) => {
@@ -266,7 +266,7 @@ function bootstrapFloating(config) {
   fab.className = "pyne-agent-fab";
   fab.type = "button";
   fab.id = "pyne-agent-fab";
-  fab.textContent = "Pine™ Agent";
+  fab.textContent = "PYNE Agent";
   document.body.appendChild(fab);
 
   let panel = null;
@@ -295,12 +295,12 @@ function bootstrapFloating(config) {
 }
 
 const plugin = {
-  id: "pine-agent",
-  name: "Pine Script™ Agent",
+  id: "pyne-agent",
+  name: "PYNE Agent",
   kind: "component",
-  version: "0.1.0",
+  version: "0.1.2",
   description:
-    "Natural-language Pine Script™ coding via Cloudflare® Workers AI™ and a private Vectorize™ knowledge base (v5/v6 docs + open corpus). AXIS sister plugin for HOOX / PYNE.",
+    "Natural-language PYNE script authoring via Cloudflare® Workers AI™ and a private Vectorize™ knowledge base (v5/v6 docs + open corpus). AXIS sister plugin for HOOX / PYNE.",
   builtIn: false,
   capabilities: {
     needsNetwork: true,
@@ -324,7 +324,7 @@ const plugin = {
     pineVersion: {
       type: "select",
       default: "auto",
-      label: "Pine version preference",
+      label: "Language version preference",
       options: ["auto", "v5", "v6"],
     },
     style: {
@@ -349,8 +349,8 @@ const plugin = {
       el.innerHTML = "";
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = "Pine™ Agent";
-      btn.title = "Open Pine Script™ Agent chat";
+      btn.textContent = "PYNE Agent";
+      btn.title = "Open PYNE Agent chat";
       let open = null;
       btn.addEventListener("click", () => {
         if (open) {
@@ -383,7 +383,7 @@ const plugin = {
     if (typeof document !== "undefined" && !config.disableFloating) {
       this._floatDispose = bootstrapFloating(config);
     }
-    ctx?.setStatus?.("Pine Script™ Agent ready", "info");
+    ctx?.setStatus?.("PYNE Agent ready", "info");
   },
 
   async dispose() {

@@ -1,8 +1,8 @@
 # pyne-agent-worker
 
-> **Cloudflare® Workers AI™** agent that writes **Pine Script™** from natural language,
-> backed by a private **Vectorize™** knowledge base (v5/v6 docs + open corpus ≤ 1000 +
-> operator-supplied built-in references). **AXIS** sister plugin for the HOOX / PYNE stack.
+> **Cloudflare® Workers AI™** **PYNE Agent** — natural-language script authoring for the HOOX / PYNE stack,
+> backed by an optional private **Vectorize™** knowledge base. **AXIS** sister plugin.
+> (Targets the Pine Script™ language; not a TradingView® product.)
 
 **Version:** 0.1.2 · **Runtime:** Cloudflare Workers (TypeScript) · **License:** AGPL-3.0-or-later
 
@@ -19,7 +19,7 @@ You can deploy and use this agent with **only Cloudflare® Workers AI™** (plus
 
 | Mode | What you need | Behavior |
 |------|----------------|----------|
-| **Standalone** | Worker + AI binding (+ optional KB) | NL → Pine Script™ chat; validation skipped |
+| **Standalone** | Worker + AI binding (+ optional KB) | NL → PYNE script chat; validation skipped |
 | **HOOX-enhanced** | + pyne-worker service binding or `PYNE_WORKER_URL` | Same chat + generate→validate→retry on `/run` |
 
 `GET /health` reports `"mode": "standalone" | "hoox"`. Chat always works in standalone.
@@ -28,7 +28,7 @@ You can deploy and use this agent with **only Cloudflare® Workers AI™** (plus
 
 | Sibling | Role | Required? |
 |---------|------|-----------|
-| **pyne-agent-worker** (this) | Edge **write** Pine via chat + RAG | — |
+| **pyne-agent-worker** (this) | Edge **write** scripts via chat + RAG (PYNE Agent) | — |
 | [hoox-sh/pyne](https://github.com/hoox-sh/pyne) | Pine toolchain + Pro API | Optional |
 | [hoox-sh/pyne-worker](https://github.com/hoox-sh/pyne-worker) | Edge **evaluate** host | Optional (validate loop only) |
 | [hoox-sh/axis](https://github.com/hoox-sh/axis) | Charting PWA (plugins) | Optional UI |
@@ -45,7 +45,7 @@ User (AXIS plugin / browser / HTTP)
             ▼
    Vectorize™ + R2 knowledge (optional)
             │
-            ├──► Pine Script™ in reply (always)
+            ├──► script source in reply (always)
             │
             └──► optional: pyne-worker /run validate→retry
                  (only if you run HOOX / set PYNE_WORKER_URL)
@@ -68,14 +68,14 @@ Knowledge is **operator-ingested** into private R2 + Vectorize only:
 
 ## Features
 
-- **POST `/v1/chat`** — NL → Pine Script™ with RAG context (**standalone OK**)
+- **POST `/v1/chat`** — NL → PYNE scripts with RAG context (**standalone OK**)
 - **Optional generate → validate → retry** — only when **pyne-worker** is configured (`POST /run` with synthetic bars); otherwise skipped automatically
 - **GET/POST `/v1/search`** — Vectorize search (no-op empty if KB not set up)
 - **Sessions** — optional D1 history (`/v1/sessions`)
 - **AXIS plugin** — `GET /plugin/axis-pine-agent.js` (`kind: component` + floating UI fallback)
 - **Static chat shell** — `GET /` for demos / iframe
 - **Admin index** — `POST /v1/admin/embed` + `/v1/admin/index` (requires `API_KEY`)
-- **Trademark-safe copy** — Pine Script™ / TradingView® / Cloudflare® in UI + API
+- **Product name:** **PYNE Agent** (not “Pine Script Agent”); legal marks appear only in disclaimers
 
 ## Quick start (standalone)
 
@@ -148,7 +148,13 @@ https://pyne-agent-worker.<you>.workers.dev/plugin/axis-pine-agent.js
 
 3. Set **endpoint** + **API key** in plugin config.
 
-See [`plugin/README.md`](./plugin/README.md).
+See [`plugin/README.md`](./plugin/README.md) · [`docs/AXIS.md`](./docs/AXIS.md).
+
+Published AXIS docs (after site sync):
+
+- [PYNE Agent plugin](https://hoox.sh/axis/docs/plugins/pine-agent)
+- [End-user guide](https://hoox.sh/axis/docs/enduser/guides/pine-agent)
+- [PYNE agent overview](https://hoox.sh/pyne/docs/agent)
 
 ## API
 

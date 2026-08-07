@@ -29,7 +29,7 @@
 
   // --- Optional HOOX mesh only ---
   // Uncomment ONLY if pyne-worker is deployed in the same account.
-  // The agent is fully usable without this (standalone NL → Pine).
+  // The agent is fully usable without this (standalone NL → PYNE scripts).
   // "services": [
   //   { "binding": "PYNE_SERVICE", "service": "pyne-worker" }
   // ],
