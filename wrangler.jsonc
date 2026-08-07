@@ -1,0 +1,95 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pyne-agent-worker",
+  // Set your Cloudflare® account_id or rely on wrangler login defaults.
+  // "account_id": "YOUR_ACCOUNT_ID",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "placement": { "mode": "smart" },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    }
+  },
+
+  // Workers AI™ binding (chat + embeddings)
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Vectorize™ index for Pine Script™ knowledge RAG
+  // Create once:
+  //   npx wrangler vectorize create pyne-agent-kb --dimensions=768 --metric=cosine
+  // Then paste the index name (not id) below.
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "pyne-agent-kb"
+    }
+  ],
+
+  // R2: raw knowledge documents (docs / corpus chunks / operator builtins).
+  // Never commit those files to git — only live in R2.
+  //   npx wrangler r2 bucket create pyne-agent-kb
+  "r2_buckets": [
+    {
+      "binding": "KB",
+      "bucket_name": "pyne-agent-kb",
+      "preview_bucket_name": "pyne-agent-kb-dev"
+    }
+  ],
+
+  // Optional D1 for chat session history
+  //   npx wrangler d1 create pyne-agent-sessions
+  //   npx wrangler d1 execute pyne-agent-sessions --remote --file=schemas/sessions.sql
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pyne-agent-sessions",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+
+  // Static assets (AXIS plugin + simple chat shell)
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+
+  // Sister evaluate host — generate → validate → retry loop (POST /run).
+  // Prefer service binding in the same CF account; else set PYNE_WORKER_URL.
+  "services": [
+    {
+      "binding": "PYNE_SERVICE",
+      "service": "pyne-worker"
+    }
+  ],
+
+  "vars": {
+    "SERVICE_NAME": "pyne-agent-worker",
+    "SERVICE_VERSION": "0.1.1",
+    // Workers AI model ids (override via env / dashboard vars)
+    "CHAT_MODEL": "@cf/qwen/qwen2.5-coder-32b-instruct",
+    "EMBED_MODEL": "@cf/baai/bge-base-en-v1.5",
+    // Max RAG chunks injected into the prompt
+    "RAG_TOP_K": "8",
+    // Max open-corpus scripts the ingest tooling will accept
+    "CORPUS_MAX_SCRIPTS": "1000",
+    // CORS allow-list (comma-separated). AXIS local default + HOOX.
+    "ALLOWED_ORIGINS": "http://localhost:8081,http://127.0.0.1:8081,https://hoox.sh,https://hoox.sh/axis,https://pynescript.ai",
+    // Optional HTTP fallback when service binding is unavailable locally:
+    // "PYNE_WORKER_URL": "https://pyne-worker.example.workers.dev",
+    "VALIDATE_DEFAULT": "true",
+    "VALIDATE_MAX_RETRIES": "2"
+  }
+
+  // Secrets (set via `wrangler secret put`):
+  //   API_KEY — shared secret for HTTP auth (X-API-Key / Authorization: Bearer)
+  //   PYNE_WORKER_API_KEY — optional; for HTTP pyne-worker when not using mesh auth
+}

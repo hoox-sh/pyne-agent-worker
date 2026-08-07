@@ -1,0 +1,52 @@
+{
+  "name": "pyne-agent-worker",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Cloudflare® Workers AI agent that writes Pine Script™ via natural language, with a RAG knowledge base (v5/v6 docs + open corpus). AXIS sister plugin for the HOOX stack.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "author": "jango-blockchained (hoox-sh)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hoox-sh/pyne-agent-worker.git"
+  },
+  "homepage": "https://hoox.sh/pyne",
+  "bugs": {
+    "url": "https://github.com/hoox-sh/pyne-agent-worker/issues"
+  },
+  "keywords": [
+    "pine-script",
+    "tradingview",
+    "cloudflare-workers",
+    "workers-ai",
+    "vectorize",
+    "rag",
+    "axis",
+    "hoox",
+    "pyne"
+  ],
+  "scripts": {
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test tests/",
+    "test:watch": "bun test --watch tests/",
+    "legal-check": "bash scripts/legal-check.sh",
+    "ingest:docs": "bun run scripts/ingest-docs.ts",
+    "ingest:corpus": "bun run scripts/ingest-corpus.ts",
+    "ingest:builtins": "bun run scripts/ingest-builtins.ts",
+    "ingest:index": "bun run scripts/build-index.ts",
+    "predeploy": "bash scripts/legal-check.sh"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250705.0",
+    "@types/bun": "latest",
+    "typescript": "^5.8.0",
+    "wrangler": "^4.20.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

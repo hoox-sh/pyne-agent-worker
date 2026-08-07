@@ -1,0 +1,16 @@
+// HOOX / PYNE example template (not a TradingView® built-in).
+// Pine Script™ is a trademark of TradingView, Inc.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//@version=6
+indicator("HOOX RSI + SMA example", overlay=false)
+
+len = input.int(14, "RSI length", minval=1)
+smooth = input.int(9, "SMA of RSI", minval=1)
+
+r = ta.rsi(close, len)
+s = ta.sma(r, smooth)
+
+plot(r, "RSI", color=color.teal)
+plot(s, "SMA", color=color.orange)
+hline(70, "Overbought", color=color.red)
+hline(30, "Oversold", color=color.green)

@@ -1,0 +1,37 @@
+{
+  "description": "Example declarations only — no content shipped. Pine Script™ / TradingView® marks of TradingView, Inc.",
+  "sources": [
+    {
+      "id": "pine-docs-v5-export",
+      "kind": "docs-v5",
+      "license": "operator-private",
+      "origin": "Operator offline export of Pine Script™ v5 reference (private RAG)",
+      "redistributable": false,
+      "notes": "Do not commit the export into this git repository."
+    },
+    {
+      "id": "pine-docs-v6-export",
+      "kind": "docs-v6",
+      "license": "operator-private",
+      "origin": "Operator offline export of Pine Script™ v6 reference (private RAG)",
+      "redistributable": false,
+      "notes": "Do not commit the export into this git repository."
+    },
+    {
+      "id": "open-corpus-1000",
+      "kind": "corpus",
+      "license": "mixed-oss",
+      "origin": "Operator-curated open scripts directory (max 1000)",
+      "redistributable": true,
+      "notes": "Only scripts you may rehost. Prefer AGPL/MIT/Apache authors."
+    },
+    {
+      "id": "builtin-metadata-refs",
+      "kind": "builtin-ref",
+      "license": "operator-private",
+      "origin": "API signatures / metadata — not full TV built-in .pine sources",
+      "redistributable": false,
+      "notes": "Never commit TradingView® built-in sources to git."
+    }
+  ]
+}

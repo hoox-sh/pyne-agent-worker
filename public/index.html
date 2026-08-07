@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PYNE Agent — Pine Script™ chat</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0f14;
+        --panel: #151b23;
+        --border: #2a3441;
+        --text: #e8eaed;
+        --muted: #8b98a5;
+        --accent: #2563eb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; font-family: ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg); color: var(--text); display: flex; flex-direction: column;
+      }
+      header {
+        padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--panel);
+      }
+      header h1 { margin: 0 0 4px; font-size: 18px; }
+      header p { margin: 0; color: var(--muted); font-size: 13px; max-width: 72ch; }
+      main { flex: 1; display: grid; grid-template-columns: 1fr; max-width: 900px; width: 100%; margin: 0 auto; padding: 16px; gap: 12px; }
+      #msgs { flex: 1; min-height: 50vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+      .msg { padding: 10px 12px; border-radius: 8px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+      .msg.user { background: #1d4f7c; align-self: flex-end; max-width: 90%; }
+      .msg.assistant { background: var(--panel); border: 1px solid var(--border); align-self: stretch; }
+      .msg.error { background: #3a1515; border: 1px solid #7f1d1d; color: #fecaca; }
+      form { display: flex; gap: 8px; }
+      textarea {
+        flex: 1; min-height: 72px; resize: vertical; background: #0b0f14; color: var(--text);
+        border: 1px solid var(--border); border-radius: 8px; padding: 10px; font: inherit;
+      }
+      button {
+        background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+        padding: 10px 16px; font-weight: 600; cursor: pointer;
+      }
+      button:disabled { opacity: 0.5; }
+      footer { padding: 12px 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+      label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      input {
+        width: 100%; background: #0b0f14; color: var(--text); border: 1px solid var(--border);
+        border-radius: 6px; padding: 8px; font: inherit; font-size: 13px;
+      }
+      pre {
+        background: #0b0f14; border: 1px solid var(--border); border-radius: 6px;
+        padding: 8px; overflow: auto; font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>PYNE Agent</h1>
+      <p>
+        Natural-language Pine Script™ coding on Cloudflare® Workers AI™ with a private
+        Vectorize™ knowledge base (v5/v6 docs + open corpus). Sister service for AXIS / HOOX.
+      </p>
+    </header>
+    <main>
+      <div class="row">
+        <div>
+          <label for="apiKey">API key (optional in open local mode)</label>
+          <input id="apiKey" type="password" autocomplete="off" placeholder="X-API-Key" />
+        </div>
+        <div>
+          <label for="version">Version preference</label>
+          <input id="version" value="auto" placeholder="auto | v5 | v6" />
+        </div>
+      </div>
+      <div id="msgs"></div>
+      <form id="form">
+        <textarea id="input" placeholder="e.g. Write a v6 RSI strategy with ATR trailing stop and clear plots for AXIS"></textarea>
+        <button type="submit" id="send">Send</button>
+      </form>
+    </main>
+    <footer>
+      Pine Script™ and TradingView® are trademarks of TradingView, Inc.
+      Cloudflare® is a registered trademark of Cloudflare, Inc.
+      This project is independent and not affiliated with or endorsed by TradingView, Inc. or Cloudflare, Inc.
+      Built-in TradingView® sources are never shipped in this repository.
+    </footer>
+    <script type="module">
+      const msgs = document.getElementById("msgs");
+      const form = document.getElementById("form");
+      const input = document.getElementById("input");
+      const send = document.getElementById("send");
+      const apiKeyEl = document.getElementById("apiKey");
+      const versionEl = document.getElementById("version");
+      let sessionId = null;
+
+      function add(role, text, isError) {
+        const d = document.createElement("div");
+        d.className = "msg " + (isError ? "error" : role);
+        d.textContent = text;
+        msgs.appendChild(d);
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+
+      add(
+        "assistant",
+        "Describe the indicator or strategy you want. Knowledge is retrieved from your private R2/Vectorize index (docs + corpus you ingested). TradingView® built-ins are never stored in git."
+      );
+
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const message = input.value.trim();
+        if (!message) return;
+        send.disabled = true;
+        add("user", message);
+        input.value = "";
+        try {
+          const headers = { "Content-Type": "application/json" };
+          const key = apiKeyEl.value.trim();
+          if (key) {
+            headers["X-API-Key"] = key;
+            headers["Authorization"] = "Bearer " + key;
+          }
+          const res = await fetch("/v1/chat", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              message,
+              session_id: sessionId || undefined,
+              pine_version: versionEl.value.trim() || "auto",
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+          sessionId = data.session_id || sessionId;
+          add("assistant", data.reply || "(empty)");
+          if (data.pine) {
+            const pre = document.createElement("pre");
+            pre.textContent = data.pine;
+            msgs.appendChild(pre);
+          }
+        } catch (e) {
+          add("assistant", e.message || String(e), true);
+        } finally {
+          send.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

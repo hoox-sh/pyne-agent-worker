@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Build / tool caches
+dist/
+.wrangler/
+.cache/
+.turbo/
+*.tsbuildinfo
+coverage/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+*.key
+
+# --- LEGAL / CONTENT GUARDRAILS ---
+# Never commit Pine Script™ sources or TV built-ins into this repo.
+# Knowledge is operator-ingested into R2/Vectorize only.
+**/*.pine
+**/*.pinescript
+**/*builtin*script*
+knowledge/data/**
+!knowledge/data/.gitkeep
+knowledge/raw/
+knowledge/corpus/
+knowledge/builtins/
+knowledge/docs-cache/
+knowledge/index-export/
+*.pine.bak
+
+# Allow tiny open templates (non-TV, HOOX-owned examples only)
+!knowledge/templates/**
+!knowledge/templates/**/*.pine.example
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs
+*.log
+npm-debug.log*

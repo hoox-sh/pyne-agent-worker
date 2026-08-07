@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hoox.sh/schemas/pyne-agent-kb-source.json",
+  "title": "PYNE Agent knowledge source declaration",
+  "type": "object",
+  "required": ["id", "kind", "license", "origin"],
+  "properties": {
+    "id": { "type": "string" },
+    "kind": {
+      "type": "string",
+      "enum": ["docs-v5", "docs-v6", "docs", "corpus", "builtin-ref", "template"]
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX or 'operator-private' / 'proprietary-not-redistributed'"
+    },
+    "origin": {
+      "type": "string",
+      "description": "Where the operator obtained the material (URL or path note)"
+    },
+    "redistributable": {
+      "type": "boolean",
+      "description": "Must be false for TradingView® proprietary materials"
+    },
+    "notes": { "type": "string" }
+  }
+}

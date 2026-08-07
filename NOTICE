@@ -1,0 +1,39 @@
+pyne-agent-worker — NOTICE
+==========================
+
+Copyright (c) 2026 HOOX · PYNE · jango-blockchained
+https://github.com/hoox-sh/pyne-agent-worker
+
+License
+-------
+This project is licensed under the GNU Affero General Public License
+**version 3 or any later version** (SPDX: AGPL-3.0-or-later).
+
+Full text: LICENSE
+
+Third-party marks
+-----------------
+Pine Script™ and TradingView® are trademarks of TradingView, Inc.
+Cloudflare® is a registered trademark of Cloudflare, Inc.
+Workers AI™, Vectorize™, and AI Search™ (formerly AutoRAG) are
+products / marks of Cloudflare, Inc.
+
+This project is an independent effort and is **not** affiliated with,
+endorsed by, or sponsored by TradingView, Inc. or Cloudflare, Inc.
+
+Content policy (important)
+--------------------------
+This repository **does not** ship:
+
+- TradingView® built-in indicator / strategy source code
+- Proprietary TradingView® library sources
+- Scraped third-party script corpora
+
+Knowledge-base documents (official Pine Script™ reference text for v5/v6,
+operator-supplied open corpora ≤ 1000 scripts, and operator-supplied
+built-in references) are ingested **at deploy/ops time** into Cloudflare®
+R2 + Vectorize™. They must never be committed to this git tree.
+
+Operators are solely responsible for ensuring they have the legal right to
+ingest any documentation or script sources into their private knowledge
+base. Do not redistribute TradingView® proprietary materials.
