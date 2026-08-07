@@ -4,7 +4,7 @@
 > backed by a private **Vectorize™** knowledge base (v5/v6 docs + open corpus ≤ 1000 +
 > operator-supplied built-in references). **AXIS** sister plugin for the HOOX / PYNE stack.
 
-**Version:** 0.1.1 · **Runtime:** Cloudflare Workers (TypeScript) · **License:** AGPL-3.0-or-later
+**Version:** 0.1.2 · **Runtime:** Cloudflare Workers (TypeScript) · **License:** AGPL-3.0-or-later
 
 _Pine Script™ and TradingView® are trademarks of TradingView, Inc.  
 Cloudflare® is a registered trademark of Cloudflare, Inc.  
@@ -12,32 +12,43 @@ This project is independent and is **not** affiliated with, endorsed by, or spon
 
 ---
 
+## Standalone by default (no HOOX / pyne-worker required)
+
+You can deploy and use this agent with **only Cloudflare® Workers AI™** (plus optional Vectorize/R2 for RAG).  
+**pyne-worker, trade-worker, and the rest of the HOOX mesh are optional.**
+
+| Mode | What you need | Behavior |
+|------|----------------|----------|
+| **Standalone** | Worker + AI binding (+ optional KB) | NL → Pine Script™ chat; validation skipped |
+| **HOOX-enhanced** | + pyne-worker service binding or `PYNE_WORKER_URL` | Same chat + generate→validate→retry on `/run` |
+
+`GET /health` reports `"mode": "standalone" | "hoox"`. Chat always works in standalone.
+
 ## Why this repo exists
 
-| Sibling | Role |
-|---------|------|
-| [hoox-sh/pyne](https://github.com/hoox-sh/pyne) (`pynescript`) | Pine toolchain + Pro API |
-| [hoox-sh/pyne-worker](https://github.com/hoox-sh/pyne-worker) | Edge **evaluate** host |
-| [hoox-sh/axis](https://github.com/hoox-sh/axis) | Charting PWA (plugins) |
-| **pyne-agent-worker** (this) | Edge **write** Pine via chat + RAG |
+| Sibling | Role | Required? |
+|---------|------|-----------|
+| **pyne-agent-worker** (this) | Edge **write** Pine via chat + RAG | — |
+| [hoox-sh/pyne](https://github.com/hoox-sh/pyne) | Pine toolchain + Pro API | Optional |
+| [hoox-sh/pyne-worker](https://github.com/hoox-sh/pyne-worker) | Edge **evaluate** host | Optional (validate loop only) |
+| [hoox-sh/axis](https://github.com/hoox-sh/axis) | Charting PWA (plugins) | Optional UI |
 
 ```text
-User (AXIS chat / HTTP)
+User (AXIS plugin / browser / HTTP)
         │  natural language
         ▼
 ┌─────────────────────────┐
 │  pyne-agent-worker      │  Workers AI™ (coder model)
-│  POST /v1/chat          │
+│  POST /v1/chat          │  ← works standalone
 └───────────┬─────────────┘
-            │ retrieve
+            │ optional RAG
             ▼
-   Vectorize™ + R2 knowledge
-   (docs v5/v6 · corpus ≤1000 · builtin-refs)
+   Vectorize™ + R2 knowledge (optional)
             │
-            ▼
-   Pine Script™ source in reply
-   → paste / insert into AXIS editor
-   → evaluate with pyne-worker / Pro API
+            ├──► Pine Script™ in reply (always)
+            │
+            └──► optional: pyne-worker /run validate→retry
+                 (only if you run HOOX / set PYNE_WORKER_URL)
 ```
 
 ## Hard legal rule
@@ -57,36 +68,53 @@ Knowledge is **operator-ingested** into private R2 + Vectorize only:
 
 ## Features
 
-- **POST `/v1/chat`** — NL → Pine Script™ with RAG context
-- **Generate → validate → retry** — each draft is run on sister **pyne-worker** (`POST /run` with synthetic bars); failures are fed back to the model (default up to 2 retries)
-- **GET/POST `/v1/search`** — raw Vectorize search over the knowledge base
+- **POST `/v1/chat`** — NL → Pine Script™ with RAG context (**standalone OK**)
+- **Optional generate → validate → retry** — only when **pyne-worker** is configured (`POST /run` with synthetic bars); otherwise skipped automatically
+- **GET/POST `/v1/search`** — Vectorize search (no-op empty if KB not set up)
 - **Sessions** — optional D1 history (`/v1/sessions`)
 - **AXIS plugin** — `GET /plugin/axis-pine-agent.js` (`kind: component` + floating UI fallback)
 - **Static chat shell** — `GET /` for demos / iframe
 - **Admin index** — `POST /v1/admin/embed` + `/v1/admin/index` (requires `API_KEY`)
 - **Trademark-safe copy** — Pine Script™ / TradingView® / Cloudflare® in UI + API
 
-## Quick start
+## Quick start (standalone)
 
 ```bash
 cd ~/Git/pyne-agent-worker
 bun install
 
-# Create Cloudflare resources (once)
+# Minimum: Workers AI is enough for chat.
+# Optional RAG / sessions (recommended for quality, not required to run):
 npx wrangler vectorize create pyne-agent-kb --dimensions=768 --metric=cosine
 npx wrangler r2 bucket create pyne-agent-kb
 npx wrangler d1 create pyne-agent-sessions
 # paste database_id into wrangler.jsonc
 npx wrangler d1 execute pyne-agent-sessions --remote --file=schemas/sessions.sql
 
-# Local
+# Local — do NOT need pyne-worker running
 cp .env.example .dev.vars   # optional API_KEY=
 bun run dev
 
-# Deploy
+# Deploy (no HOOX mesh, no pyne-worker service binding)
 echo "your-secret" | npx wrangler secret put API_KEY
 bun run deploy
 ```
+
+### Optional: enable validate loop (HOOX / pyne-worker)
+
+Only if you already run [pyne-worker](https://github.com/hoox-sh/pyne-worker):
+
+```jsonc
+// wrangler.jsonc — uncomment services block, OR set:
+// "vars": { "PYNE_WORKER_URL": "https://pyne-worker.<you>.workers.dev" }
+```
+
+```bash
+# if using HTTP instead of service binding
+echo "pyne-api-key" | npx wrangler secret put PYNE_WORKER_API_KEY
+```
+
+Without either binding, responses include `validation.available: false` and a single generate pass.
 
 ### Build the knowledge base (private)
 
@@ -153,17 +181,20 @@ See [`plugin/README.md`](./plugin/README.md).
 
 Response includes `reply`, extracted `pine` source, `validation` (attempts / pyne-worker errors), `rag` hit list, and trademark disclaimer.
 
-**Validation loop** (when pyne-worker is configured via `PYNE_SERVICE` binding or `PYNE_WORKER_URL`):
+**Validation loop** (optional — only when `PYNE_SERVICE` or `PYNE_WORKER_URL` is set):
 
 ```text
 generate (Workers AI™)
     → extract ```pine
-    → POST pyne-worker /run (synthetic OHLCV)
-    → ok? return
-    → else: fix prompt with error → retry (max_retries)
+    → [if pyne-worker configured]
+         POST pyne-worker /run (synthetic OHLCV)
+         → ok? return
+         → else: fix prompt with error → retry (max_retries)
+    → [else] return draft as-is (standalone)
 ```
 
-Disable per request with `"validate": false`.
+- Standalone users: no config needed; loop is skipped.
+- Disable even when configured: `"validate": false`.
 
 ## Configuration
 
@@ -179,11 +210,13 @@ Disable per request with `"validate": false`.
 | `RAG_TOP_K` | Context chunks (default 8) |
 | `ALLOWED_ORIGINS` | CORS for AXIS / HOOX |
 | `API_KEY` | Secret |
-| `PYNE_SERVICE` | Service binding → `pyne-worker` |
-| `PYNE_WORKER_URL` | HTTP fallback evaluate host |
-| `PYNE_WORKER_API_KEY` | Secret for HTTP pyne-worker |
-| `VALIDATE_DEFAULT` | `true` / `false` |
+| `PYNE_SERVICE` | **Optional** service binding → `pyne-worker` (off by default) |
+| `PYNE_WORKER_URL` | **Optional** HTTP evaluate host |
+| `PYNE_WORKER_API_KEY` | **Optional** secret for HTTP pyne-worker |
+| `VALIDATE_DEFAULT` | Prefer validate when available (`true` / `false`) |
 | `VALIDATE_MAX_RETRIES` | Extra fix attempts (default `2`) |
+
+Standalone deploy: leave `PYNE_*` unset. Do not add a `services` binding to a worker you do not run.
 
 ## Local layout
 

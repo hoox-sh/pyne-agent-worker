@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * generate → pyne-worker validate → retry loop for Pine Script™ chat.
+ * generate → (optional) pyne-worker validate → retry loop for Pine Script™ chat.
+ *
+ * Without pyne-worker configured this is a single generate pass (standalone mode).
+ * With pyne-worker: draft → POST /run → fix retries.
  */
 
 import {

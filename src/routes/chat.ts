@@ -147,8 +147,11 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     }
   }
 
+  const validateAvailable = isValidateAvailable(env);
+
   return json({
     ok: true,
+    mode: validateAvailable ? "hoox" : "standalone",
     session_id: sessionId || null,
     reply: loopResult.text,
     pine: loopResult.pine,
@@ -156,8 +159,10 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     latency_ms: loopResult.latency_ms,
     validation: {
       enabled: validate,
-      available: isValidateAvailable(env),
+      available: validateAvailable,
+      // true only when pyne-worker accepted the script; standalone never "fails" here
       validated: loopResult.validated,
+      skipped: !validateAvailable || loopResult.validation?.skipped === true,
       retries: loopResult.retries,
       last: loopResult.validation
         ? {

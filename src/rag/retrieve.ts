@@ -37,6 +37,11 @@ export async function retrieve(
   env: Env,
   opts: RetrieveOpts
 ): Promise<RagChunk[]> {
+  // Standalone / degraded: no Vectorize binding → empty context (chat still works).
+  if (!env.VECTORIZE || !env.AI) {
+    return [];
+  }
+
   const topK = opts.topK ?? ragTopK(env);
   const vector = await embedQuery(env, opts.query);
 

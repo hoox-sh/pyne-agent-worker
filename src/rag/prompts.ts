@@ -33,7 +33,7 @@ export function buildSystemPrompt(opts?: {
     `- Do not reproduce proprietary ${MARKS.tradingView} built-in indicator sources verbatim.`,
     `- If knowledge is insufficient, say so and write the best safe approximation with comments.`,
     `- Target version preference: ${ver}. Script kind preference: ${style}.`,
-    `- Scripts may be validated by running on pyne-worker (PYNE edge). Prefer code that parses and evaluates cleanly.`,
+    `- Prefer code that parses and evaluates cleanly on PYNE/AXIS. (Optional: operator may validate via pyne-worker; not required.)`,
     ``,
     `## Output format`,
     `1. Short plan (1–4 bullets).`,

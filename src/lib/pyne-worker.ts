@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * Client for sister pyne-worker evaluate host (POST /run).
+ * Optional client for sister pyne-worker evaluate host (POST /run).
+ *
+ * The agent is fully usable **without** pyne-worker / HOOX:
+ * when neither PYNE_SERVICE nor PYNE_WORKER_URL is set, validation is skipped
+ * and chat still returns Pine Script™ from Workers AI™ + RAG.
+ *
  * Prefer service binding PYNE_SERVICE; fall back to PYNE_WORKER_URL + key.
  */
 

@@ -43,11 +43,15 @@ bun run dev
 | AXIS plugin | `plugin/axis-pine-agent.js` |
 | Ingest | `scripts/ingest-*.ts`, `scripts/build-index.ts` |
 
-## Validate loop
+## Standalone first
 
-Chat defaults to **generate → pyne-worker `/run` → retry** when `PYNE_SERVICE`
-or `PYNE_WORKER_URL` is set. Do not block deploy if pyne-worker is missing —
-validation is skipped with `validation.last.skipped`.
+**pyne-worker is optional.** Default `wrangler.jsonc` has no `services` binding.
+Users who do not run the HOOX stack still get full NL → Pine chat (AI + optional RAG).
+
+## Validate loop (optional)
+
+When `PYNE_SERVICE` or `PYNE_WORKER_URL` is set: **generate → pyne-worker `/run` → retry**.  
+When not set: single generate; `validation.available: false` / skipped. Never fail chat because pyne-worker is absent.
 
 ## Related repos
 

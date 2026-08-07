@@ -155,6 +155,24 @@ describe("generateValidateRetry", () => {
     expect(result.validation).toBeNull();
   });
 
+  test("standalone: works without pyne-worker config", async () => {
+    const result = await generateValidateRetry({
+      env: {} as Env, // no PYNE_SERVICE, no PYNE_WORKER_URL
+      messages: [{ role: "user", content: "sma cross" }],
+      validate: true, // requested, but unavailable → single pass
+      chatFn: async () => ({
+        text: "plan\n```pine\n//@version=6\nindicator('SMA')\nplot(ta.sma(close, 14))\n```",
+        model: "standalone-model",
+        latencyMs: 3,
+      }),
+    });
+    expect(result.attempts.length).toBe(1);
+    expect(result.retries).toBe(0);
+    expect(result.validated).toBe(false);
+    expect(result.pine).toContain("ta.sma");
+    expect(result.validation).toBeNull();
+  });
+
   test("retries when pine block missing then succeeds", async () => {
     let calls = 0;
     const result = await generateValidateRetry({

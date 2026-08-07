@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pyne-agent-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": { "binding": "AI" },
+  "vectorize": [
+    { "binding": "VECTORIZE", "index_name": "pyne-agent-kb" }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "KB",
+      "bucket_name": "pyne-agent-kb",
+      "preview_bucket_name": "pyne-agent-kb-dev"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pyne-agent-sessions",
+      "database_id": "REPLACE_WITH_D1_ID"
+    }
+  ],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+
+  // --- Optional HOOX mesh only ---
+  // Uncomment ONLY if pyne-worker is deployed in the same account.
+  // The agent is fully usable without this (standalone NL → Pine).
+  // "services": [
+  //   { "binding": "PYNE_SERVICE", "service": "pyne-worker" }
+  // ],
+
+  "vars": {
+    "SERVICE_NAME": "pyne-agent-worker",
+    "SERVICE_VERSION": "0.1.2",
+    "CHAT_MODEL": "@cf/qwen/qwen2.5-coder-32b-instruct",
+    "EMBED_MODEL": "@cf/baai/bge-base-en-v1.5",
+    "RAG_TOP_K": "8",
+    "CORPUS_MAX_SCRIPTS": "1000",
+    "ALLOWED_ORIGINS": "http://localhost:8081,https://hoox.sh,https://hoox.sh/axis",
+    // "PYNE_WORKER_URL": "https://pyne-worker.example.workers.dev",
+    "VALIDATE_DEFAULT": "true",
+    "VALIDATE_MAX_RETRIES": "2"
+  }
+}

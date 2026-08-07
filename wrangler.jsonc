@@ -62,18 +62,15 @@
     "binding": "ASSETS"
   },
 
-  // Sister evaluate host — generate → validate → retry loop (POST /run).
-  // Prefer service binding in the same CF account; else set PYNE_WORKER_URL.
-  "services": [
-    {
-      "binding": "PYNE_SERVICE",
-      "service": "pyne-worker"
-    }
-  ],
+  // Optional: sister pyne-worker for generate→validate→retry (NOT required).
+  // Standalone mode works with AI only — do not enable this unless you run HOOX/pyne-worker.
+  // "services": [
+  //   { "binding": "PYNE_SERVICE", "service": "pyne-worker" }
+  // ],
 
   "vars": {
     "SERVICE_NAME": "pyne-agent-worker",
-    "SERVICE_VERSION": "0.1.1",
+    "SERVICE_VERSION": "0.1.2",
     // Workers AI model ids (override via env / dashboard vars)
     "CHAT_MODEL": "@cf/qwen/qwen2.5-coder-32b-instruct",
     "EMBED_MODEL": "@cf/baai/bge-base-en-v1.5",
@@ -83,13 +80,14 @@
     "CORPUS_MAX_SCRIPTS": "1000",
     // CORS allow-list (comma-separated). AXIS local default + HOOX.
     "ALLOWED_ORIGINS": "http://localhost:8081,http://127.0.0.1:8081,https://hoox.sh,https://hoox.sh/axis,https://pynescript.ai",
-    // Optional HTTP fallback when service binding is unavailable locally:
+    // Optional evaluate host (only if you run pyne-worker / HOOX stack):
     // "PYNE_WORKER_URL": "https://pyne-worker.example.workers.dev",
+    // When no pyne-worker is configured, validation is automatically skipped.
     "VALIDATE_DEFAULT": "true",
     "VALIDATE_MAX_RETRIES": "2"
   }
 
   // Secrets (set via `wrangler secret put`):
   //   API_KEY — shared secret for HTTP auth (X-API-Key / Authorization: Bearer)
-  //   PYNE_WORKER_API_KEY — optional; for HTTP pyne-worker when not using mesh auth
+  //   PYNE_WORKER_API_KEY — optional; only for HTTP pyne-worker validate loop
 }
