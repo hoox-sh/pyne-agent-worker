@@ -52,7 +52,7 @@
     {
       "binding": "DB",
       "database_name": "pyne-agent-sessions",
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_id": "5dd88bd5-c1da-4070-a77b-d424fea57225"
     }
   ],
 
@@ -79,7 +79,7 @@
     // Max open-corpus scripts the ingest tooling will accept
     "CORPUS_MAX_SCRIPTS": "1000",
     // CORS allow-list (comma-separated). AXIS local default + HOOX.
-    "ALLOWED_ORIGINS": "http://localhost:8081,http://127.0.0.1:8081,https://hoox.sh,https://hoox.sh/axis,https://pynescript.ai",
+    "ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081,https://axis.hoox.sh,https://hoox.sh,https://hoox.sh/axis,https://pynescript.ai,https://pynescript-axis.pages.dev",
     // Optional evaluate host (only if you run pyne-worker / HOOX stack):
     // "PYNE_WORKER_URL": "https://pyne-worker.example.workers.dev",
     // When no pyne-worker is configured, validation is automatically skipped.
