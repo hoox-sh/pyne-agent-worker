@@ -58,11 +58,18 @@ async function agentFetch(endpoint, apiKey, path, init = {}, hostFetch) {
   return data;
 }
 
+const PLUGIN_UI_VERSION = "0.1.5";
+
 function injectStyles() {
   const id = "pyne-agent-styles";
-  if (document.getElementById(id)) return;
-  const style = document.createElement("style");
-  style.id = id;
+  let style = document.getElementById(id);
+  if (style?.getAttribute("data-v") === PLUGIN_UI_VERSION) return;
+  if (!style) {
+    style = document.createElement("style");
+    style.id = id;
+    document.head.appendChild(style);
+  }
+  style.setAttribute("data-v", PLUGIN_UI_VERSION);
   style.textContent = `
     .pyne-agent-root {
       display: flex; flex-direction: column; height: 100%; min-height: 0;
@@ -87,6 +94,48 @@ function injectStyles() {
       color: var(--color-text, #e8eaed);
     }
     .pyne-agent-header small { color: var(--color-text-dim, #8b98a5); font-size: 10px; }
+    .pyne-agent-status {
+      display: inline-flex; align-items: center; gap: 5px;
+      color: var(--color-text-dim, #8b98a5); font-size: 10px;
+      min-height: 1.2em;
+    }
+    .pyne-agent-status.is-thinking {
+      color: var(--color-accent, #5b7cfa);
+    }
+    .pyne-agent-status-label { line-height: 1; }
+    .pyne-agent-status-dots {
+      display: none;
+      align-items: center;
+      gap: 3px;
+      height: 10px;
+    }
+    .pyne-agent-status.is-thinking .pyne-agent-status-dots { display: inline-flex; }
+    .pyne-agent-status-dots span {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--color-accent, #5b7cfa);
+      opacity: 0.35;
+      animation: pyne-agent-bounce 1.05s ease-in-out infinite;
+    }
+    .pyne-agent-status-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .pyne-agent-status-dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes pyne-agent-bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+      40% { transform: translateY(-3px); opacity: 1; }
+    }
+    .pyne-agent-status.is-thinking .pyne-agent-status-label {
+      animation: pyne-agent-pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pyne-agent-pulse {
+      0%, 100% { opacity: 0.75; }
+      50% { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pyne-agent-status-dots span,
+      .pyne-agent-status.is-thinking .pyne-agent-status-label {
+        animation: none;
+        opacity: 0.85;
+      }
+    }
     .pyne-agent-header-actions {
       display: flex; align-items: center; gap: 6px; flex-shrink: 0;
     }
@@ -338,7 +387,6 @@ function injectStyles() {
       border-color: var(--color-accent, #5b7cfa);
     }
   `;
-  document.head.appendChild(style);
 }
 
 /**
@@ -652,7 +700,10 @@ function mountChat(el, api, config, opts = {}) {
         <small>Cloudflare® Workers AI™ · AXIS plugin</small>
       </div>
       <div class="pyne-agent-header-actions">
-        <small class="pyne-agent-status">ready</small>
+        <small class="pyne-agent-status" data-status role="status" aria-live="polite">
+          <span class="pyne-agent-status-label">ready</span>
+          <span class="pyne-agent-status-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        </small>
         ${
           opts.onClose
             ? `<button type="button" class="pyne-agent-header-btn" data-close title="Close" aria-label="Close PYNE Agent">×</button>`
@@ -677,7 +728,8 @@ function mountChat(el, api, config, opts = {}) {
   const form = root.querySelector("[data-form]");
   const input = root.querySelector("[data-input]");
   const sendBtn = root.querySelector("[data-send]");
-  const status = root.querySelector(".pyne-agent-status");
+  const status = root.querySelector("[data-status]");
+  const statusLabel = status?.querySelector(".pyne-agent-status-label");
   const closeBtn = root.querySelector("[data-close]");
 
   if (closeBtn && opts.onClose) {
@@ -691,7 +743,15 @@ function mountChat(el, api, config, opts = {}) {
   let busy = false;
 
   function setStatus(t) {
-    if (status) status.textContent = t;
+    if (!status) return;
+    const raw = String(t ?? "");
+    // Normalize "thinking…" / "thinking..." → animated thinking state
+    const thinking = /^\s*thinking[.…\s]*$/i.test(raw);
+    status.classList.toggle("is-thinking", thinking);
+    const label = thinking ? "thinking" : raw;
+    if (statusLabel) statusLabel.textContent = label;
+    else status.textContent = label;
+    status.setAttribute("aria-busy", thinking ? "true" : "false");
   }
 
   /**
@@ -1006,7 +1066,7 @@ const plugin = {
   id: "pyne-agent",
   name: "PYNE Agent",
   kind: "component",
-  version: "0.1.4",
+  version: "0.1.5",
   description:
     "Natural-language PYNE script authoring via Cloudflare® Workers AI™ and a private Vectorize™ knowledge base (v5/v6 docs + open corpus). AXIS sister plugin for HOOX / PYNE.",
   builtIn: false,
