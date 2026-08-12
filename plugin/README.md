@@ -24,7 +24,7 @@ https://<your-worker>.workers.dev/plugin/axis-pine-agent.js
 
 - **kind:** `component`
 - **slots:** `manager-tab`, `topbar-action`, `settings-section`
-- **Fallback:** floating “PYNE Agent” button if AXIS has not mounted component slots yet
+- **Fallback:** compact accent **Agent** launcher (bottom-right above editor bottom bars) if AXIS has not mounted component slots yet; free-floating chat modal with close + resize (not a dock panel)
 
 If your AXIS build’s dynamic loader still rejects `kind: 'component'`, use the
 Worker’s built-in chat UI (`https://<worker>/`) or register the module from a

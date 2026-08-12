@@ -8,8 +8,8 @@
 //
 // Contract namespace: pynescript.axis.plugins.v1
 // Kind: component (manager-tab + topbar-action). AXIS may still be phase-2
-// for component mounting; this module also attaches a floating chat when the
-// host does not call mount() (best-effort global bootstrap).
+// for component mounting; this module also attaches a compact launcher when
+// the host does not call mount() (best-effort global bootstrap).
 //
 // Pine Script™ and TradingView® are trademarks of TradingView, Inc.
 // Cloudflare® is a registered trademark of Cloudflare, Inc.
@@ -23,6 +23,14 @@
  */
 
 const DEFAULT_ENDPOINT = "";
+
+/** Default floating modal geometry (not an AXIS dock panel). */
+const MODAL_DEFAULT = {
+  w: 420,
+  h: 520,
+  minW: 300,
+  minH: 280,
+};
 
 function cfg(config) {
   const c = config || {};
@@ -57,60 +65,373 @@ function injectStyles() {
   style.id = id;
   style.textContent = `
     .pyne-agent-root {
-      display: flex; flex-direction: column; height: 100%; min-height: 320px;
-      font-family: ui-sans-serif, system-ui, sans-serif; color: #e8eaed;
-      background: #0f1419; border: 1px solid #2a3441; border-radius: 8px;
+      display: flex; flex-direction: column; height: 100%; min-height: 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--color-text, #e8eaed);
+      background: var(--color-bg-panel, #0f1419);
+      border: 1px solid var(--color-border, #2a3441);
+      border-radius: var(--radius-input, 3px);
       overflow: hidden;
+      box-shadow: var(--ui-shadow-panel, 0 12px 40px rgba(0,0,0,0.45));
     }
     .pyne-agent-header {
-      padding: 10px 12px; border-bottom: 1px solid #2a3441;
+      padding: 8px 10px; border-bottom: 1px solid var(--color-border-soft, #2a3441);
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      background: #151b23;
+      background: var(--color-bg-elev, #151b23);
+      cursor: grab; user-select: none; flex-shrink: 0;
+      touch-action: none;
     }
-    .pyne-agent-header h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
-    .pyne-agent-header small { color: #8b98a5; font-size: 11px; }
+    .pyne-agent-header:active { cursor: grabbing; }
+    .pyne-agent-header h3 {
+      margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+      color: var(--color-text, #e8eaed);
+    }
+    .pyne-agent-header small { color: var(--color-text-dim, #8b98a5); font-size: 10px; }
+    .pyne-agent-header-actions {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    .pyne-agent-header-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 1.65em; height: 1.65em; padding: 0;
+      background: transparent;
+      color: var(--color-text-dim, #8b98a5);
+      border: 1px solid transparent;
+      border-radius: var(--radius-input, 3px);
+      font-size: 14px; line-height: 1; cursor: pointer;
+    }
+    .pyne-agent-header-btn:hover {
+      color: var(--color-text, #e8eaed);
+      background: var(--color-bg-hover, #22232e);
+      border-color: var(--color-border-soft, #252730);
+    }
+    .pyne-agent-header-btn:focus-visible {
+      outline: none;
+      border-color: var(--color-accent, #5b7cfa);
+    }
     .pyne-agent-msgs {
-      flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+      flex: 1; overflow: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+      min-height: 0;
     }
     .pyne-agent-msg {
-      max-width: 92%; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45;
+      max-width: 92%; padding: 7px 9px; border-radius: var(--radius-input, 3px);
+      font-size: 12px; line-height: 1.45;
       white-space: pre-wrap; word-break: break-word;
     }
-    .pyne-agent-msg.user { align-self: flex-end; background: #1d4f7c; }
-    .pyne-agent-msg.assistant { align-self: flex-start; background: #1a222c; border: 1px solid #2a3441; }
-    .pyne-agent-msg.error { align-self: stretch; background: #3a1515; border: 1px solid #7f1d1d; color: #fecaca; }
+    .pyne-agent-msg.user {
+      align-self: flex-end;
+      background: color-mix(in srgb, var(--color-accent, #2563eb) 28%, var(--color-bg-elev, #1d4f7c));
+      color: var(--color-text, #e8eaed);
+    }
+    .pyne-agent-msg.assistant {
+      align-self: flex-start;
+      background: var(--color-bg-elev, #1a222c);
+      border: 1px solid var(--color-border-soft, #2a3441);
+    }
+    .pyne-agent-msg.error {
+      align-self: stretch;
+      background: color-mix(in srgb, var(--color-red, #7f1d1d) 18%, var(--color-bg-panel, #3a1515));
+      border: 1px solid color-mix(in srgb, var(--color-red, #7f1d1d) 55%, transparent);
+      color: var(--color-red, #fecaca);
+    }
     .pyne-agent-form {
-      display: flex; gap: 8px; padding: 10px; border-top: 1px solid #2a3441; background: #151b23;
+      display: flex; gap: 8px; padding: 8px 10px;
+      border-top: 1px solid var(--color-border-soft, #2a3441);
+      background: var(--color-bg-elev, #151b23);
+      flex-shrink: 0;
     }
     .pyne-agent-form textarea {
-      flex: 1; resize: none; min-height: 56px; max-height: 140px;
-      background: #0b0f14; color: #e8eaed; border: 1px solid #2a3441; border-radius: 6px;
-      padding: 8px; font: inherit; font-size: 12.5px;
+      flex: 1; resize: none; min-height: 52px; max-height: 140px;
+      background: var(--color-bg-base, #0b0f14);
+      color: var(--color-text, #e8eaed);
+      border: 1px solid var(--color-border, #2a3441);
+      border-radius: var(--radius-input, 3px);
+      padding: 7px 8px; font: inherit; font-size: 12px;
     }
-    .pyne-agent-form button {
-      align-self: flex-end; background: #2563eb; color: white; border: 0; border-radius: 6px;
-      padding: 8px 12px; font-weight: 600; font-size: 12px; cursor: pointer;
+    .pyne-agent-form textarea:focus {
+      outline: none;
+      border-color: var(--color-accent, #5b7cfa);
+    }
+    .pyne-agent-form button[type="submit"] {
+      align-self: flex-end;
+      background: color-mix(in srgb, var(--color-accent, #2563eb) 22%, var(--color-bg-elev, #171821));
+      color: var(--color-accent, #5b7cfa);
+      border: 1px solid var(--color-accent, #5b7cfa);
+      border-radius: var(--radius-input, 3px);
+      padding: 6px 10px; font-weight: 600; font-size: 11px; cursor: pointer;
+    }
+    .pyne-agent-form button[type="submit"]:hover {
+      background: color-mix(in srgb, var(--color-accent-hover, #4a6ae8) 32%, var(--color-bg-elev, #171821));
+      border-color: var(--color-accent-hover, #4a6ae8);
+      color: var(--color-accent-hover, #4a6ae8);
     }
     .pyne-agent-form button:disabled { opacity: 0.5; cursor: not-allowed; }
     .pyne-agent-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
     .pyne-agent-actions button {
-      background: #243041; color: #e8eaed; border: 1px solid #3a4a5c; border-radius: 4px;
-      padding: 4px 8px; font-size: 11px; cursor: pointer;
+      background: var(--color-bg-hover, #243041);
+      color: var(--color-text, #e8eaed);
+      border: 1px solid var(--color-border, #3a4a5c);
+      border-radius: var(--radius-input, 3px);
+      padding: 3px 7px; font-size: 11px; cursor: pointer;
     }
+    .pyne-agent-actions button:hover {
+      border-color: var(--color-accent, #5b7cfa);
+      color: var(--color-accent, #5b7cfa);
+    }
+    .pyne-agent-legal {
+      font-size: 9px; color: var(--color-text-faint, #6b7785);
+      padding: 0 10px 6px; flex-shrink: 0;
+    }
+
+    /* Compact launcher — theme accent, standard radius, above bottom chrome */
+    .pyne-agent-launch {
+      position: fixed;
+      z-index: 99998;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: var(--ui-control-h, 2em);
+      min-height: 1.65em;
+      padding: 0 0.65em;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      color: var(--color-accent, #5b7cfa);
+      background: color-mix(in srgb, var(--color-accent, #5b7cfa) 18%, var(--color-bg-elev, #171821));
+      border: 1px solid var(--color-accent, #5b7cfa);
+      border-radius: var(--radius-input, 3px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+    }
+    .pyne-agent-launch:hover {
+      background: color-mix(in srgb, var(--color-accent-hover, #4a6ae8) 28%, var(--color-bg-elev, #171821));
+      border-color: var(--color-accent-hover, #4a6ae8);
+      color: var(--color-accent-hover, #4a6ae8);
+    }
+    .pyne-agent-launch:focus-visible {
+      outline: none;
+      border-color: var(--color-accent, #5b7cfa);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #5b7cfa) 40%, transparent);
+    }
+    .pyne-agent-launch[aria-expanded="true"] {
+      background: color-mix(in srgb, var(--color-accent, #5b7cfa) 28%, var(--color-bg-elev, #171821));
+    }
+    .pyne-agent-launch-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--color-accent, #5b7cfa);
+      flex-shrink: 0;
+    }
+
+    /* Floating modal shell (default position — not an AXIS panel) */
     .pyne-agent-float {
-      position: fixed; right: 16px; bottom: 16px; z-index: 99999;
-      width: min(420px, calc(100vw - 24px)); height: min(560px, calc(100vh - 48px));
-      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      position: fixed;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      min-width: ${MODAL_DEFAULT.minW}px;
+      min-height: ${MODAL_DEFAULT.minH}px;
+      box-sizing: border-box;
     }
-    .pyne-agent-fab {
-      position: fixed; right: 16px; bottom: 16px; z-index: 99998;
-      background: #2563eb; color: #fff; border: 0; border-radius: 999px;
-      padding: 12px 16px; font-weight: 700; font-size: 12px; cursor: pointer;
-      box-shadow: 0 8px 24px rgba(37,99,235,0.4);
+    .pyne-agent-float .pyne-agent-root {
+      flex: 1;
+      min-height: 0;
+      height: 100%;
     }
-    .pyne-agent-legal { font-size: 10px; color: #6b7785; padding: 0 12px 8px; }
+    .pyne-agent-resize {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 14px;
+      height: 14px;
+      cursor: nwse-resize;
+      z-index: 2;
+      touch-action: none;
+    }
+    .pyne-agent-resize::after {
+      content: "";
+      position: absolute;
+      right: 3px;
+      bottom: 3px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--color-text-faint, #5c5f6e);
+      border-bottom: 2px solid var(--color-text-faint, #5c5f6e);
+      opacity: 0.85;
+    }
+    .pyne-agent-resize:hover::after {
+      border-color: var(--color-accent, #5b7cfa);
+    }
   `;
   document.head.appendChild(style);
+}
+
+/**
+ * Place the launcher at the bottom-right of the editor (or viewport),
+ * sitting just above the editor status bar / app status bar.
+ * @param {HTMLElement} btn
+ */
+function placeLauncher(btn) {
+  const pad = 8;
+  const editor =
+    document.querySelector('[data-testid="axis-editor"]') ||
+    document.querySelector(".axis-editor-statusbar")?.closest?.('[data-testid="axis-editor"]') ||
+    document.querySelector(".axis-editor-statusbar")?.parentElement;
+
+  if (editor && editor.getBoundingClientRect) {
+    const er = editor.getBoundingClientRect();
+    if (er.width > 40 && er.height > 40) {
+      const status =
+        editor.querySelector('[data-testid="axis-editor-stats"]') ||
+        editor.querySelector(".axis-editor-statusbar");
+      const statusH = status ? status.getBoundingClientRect().height : 0;
+      // Bottom-right of editor, just above its status/action bar
+      const bottom = Math.max(pad, window.innerHeight - er.bottom + statusH + pad);
+      const right = Math.max(pad, window.innerWidth - er.right + pad);
+      btn.style.bottom = `${Math.round(bottom)}px`;
+      btn.style.right = `${Math.round(right)}px`;
+      btn.style.left = "auto";
+      btn.style.top = "auto";
+      return;
+    }
+  }
+
+  // Fallback: viewport bottom-right above app status bar
+  const appBar = document.querySelector('[data-testid="axis-statusbar"]');
+  let bottom = 40;
+  if (appBar) {
+    const r = appBar.getBoundingClientRect();
+    bottom = Math.max(pad, window.innerHeight - r.top + pad);
+  } else {
+    // Theme token fallback when AXIS chrome is not present
+    bottom = 48;
+  }
+  btn.style.bottom = `${Math.round(bottom)}px`;
+  btn.style.right = `${pad}px`;
+  btn.style.left = "auto";
+  btn.style.top = "auto";
+}
+
+/**
+ * Default modal position: bottom-right of the editor area (or viewport),
+ * above bottom chrome — free float, not a dock panel.
+ * @returns {{ x: number, y: number, w: number, h: number }}
+ */
+function defaultModalGeometry() {
+  const w = Math.min(MODAL_DEFAULT.w, Math.max(MODAL_DEFAULT.minW, window.innerWidth - 24));
+  const h = Math.min(MODAL_DEFAULT.h, Math.max(MODAL_DEFAULT.minH, window.innerHeight - 80));
+  const pad = 12;
+
+  const editor = document.querySelector('[data-testid="axis-editor"]');
+  if (editor) {
+    const er = editor.getBoundingClientRect();
+    if (er.width > 80 && er.height > 80) {
+      const status =
+        editor.querySelector('[data-testid="axis-editor-stats"]') ||
+        editor.querySelector(".axis-editor-statusbar");
+      const statusH = status ? status.getBoundingClientRect().height : 28;
+      // Sit above the editor bottom bar, right-aligned within the editor
+      let x = er.right - w - pad;
+      let y = er.bottom - statusH - h - pad;
+      x = Math.min(Math.max(8, x), window.innerWidth - w - 8);
+      y = Math.min(Math.max(8, y), window.innerHeight - h - 8);
+      return { x: Math.round(x), y: Math.round(y), w, h };
+    }
+  }
+
+  const appBar = document.querySelector('[data-testid="axis-statusbar"]');
+  const bottomReserve = appBar
+    ? Math.max(36, window.innerHeight - appBar.getBoundingClientRect().top + 8)
+    : 48;
+  const x = Math.max(8, window.innerWidth - w - pad);
+  const y = Math.max(8, window.innerHeight - h - bottomReserve);
+  return { x: Math.round(x), y: Math.round(y), w, h };
+}
+
+/**
+ * @param {HTMLElement} shell
+ * @param {{ x: number, y: number, w: number, h: number }} geo
+ */
+function applyGeometry(shell, geo) {
+  shell.style.left = `${geo.x}px`;
+  shell.style.top = `${geo.y}px`;
+  shell.style.width = `${geo.w}px`;
+  shell.style.height = `${geo.h}px`;
+  shell.style.right = "auto";
+  shell.style.bottom = "auto";
+}
+
+/**
+ * Wire header drag + corner resize on a floating shell.
+ * @param {HTMLElement} shell
+ * @param {HTMLElement} header
+ * @param {HTMLElement} resizeEl
+ * @param {{ x: number, y: number, w: number, h: number }} geo
+ * @returns {() => void}
+ */
+function enableFloatChrome(shell, header, resizeEl, geo) {
+  /** @type {{ mode: 'move' | 'resize', sx: number, sy: number, ox: number, oy: number, ow: number, oh: number } | null} */
+  let drag = null;
+
+  const onMove = (ev) => {
+    if (!drag) return;
+    const dx = ev.clientX - drag.sx;
+    const dy = ev.clientY - drag.sy;
+    if (drag.mode === "move") {
+      geo.x = Math.max(0, Math.min(window.innerWidth - 48, drag.ox + dx));
+      geo.y = Math.max(0, Math.min(window.innerHeight - 40, drag.oy + dy));
+    } else {
+      geo.w = Math.max(MODAL_DEFAULT.minW, Math.min(window.innerWidth - geo.x - 8, drag.ow + dx));
+      geo.h = Math.max(MODAL_DEFAULT.minH, Math.min(window.innerHeight - geo.y - 8, drag.oh + dy));
+    }
+    applyGeometry(shell, geo);
+  };
+
+  const onUp = () => {
+    if (!drag) return;
+    drag = null;
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+  };
+
+  const start = (mode, ev) => {
+    if (ev.button != null && ev.button !== 0) return;
+    // Don't start drag from header action buttons
+    if (mode === "move" && ev.target instanceof Element) {
+      if (ev.target.closest(".pyne-agent-header-btn")) return;
+    }
+    ev.preventDefault();
+    drag = {
+      mode,
+      sx: ev.clientX,
+      sy: ev.clientY,
+      ox: geo.x,
+      oy: geo.y,
+      ow: geo.w,
+      oh: geo.h,
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = mode === "move" ? "grabbing" : "nwse-resize";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
+  const onHeaderDown = (ev) => start("move", ev);
+  const onResizeDown = (ev) => start("resize", ev);
+
+  header.addEventListener("pointerdown", onHeaderDown);
+  resizeEl.addEventListener("pointerdown", onResizeDown);
+
+  return () => {
+    onUp();
+    header.removeEventListener("pointerdown", onHeaderDown);
+    resizeEl.removeEventListener("pointerdown", onResizeDown);
+  };
 }
 
 /**
@@ -118,8 +439,9 @@ function injectStyles() {
  * @param {HTMLElement} el
  * @param {Record<string, unknown>} api host API (optional insertScript, getConfig)
  * @param {Record<string, unknown>} [config]
+ * @param {{ onClose?: () => void, floating?: boolean }} [opts]
  */
-function mountChat(el, api, config) {
+function mountChat(el, api, config, opts = {}) {
   injectStyles();
   const conf = cfg({ ...cfg(api?.getConfig?.() || {}), ...(config || {}) });
   el.innerHTML = "";
@@ -128,12 +450,19 @@ function mountChat(el, api, config) {
   const root = document.createElement("div");
   root.className = "pyne-agent-root";
   root.innerHTML = `
-    <div class="pyne-agent-header">
+    <div class="pyne-agent-header" data-header>
       <div>
         <h3>PYNE Agent</h3>
         <small>Cloudflare® Workers AI™ · AXIS plugin</small>
       </div>
-      <small class="pyne-agent-status">ready</small>
+      <div class="pyne-agent-header-actions">
+        <small class="pyne-agent-status">ready</small>
+        ${
+          opts.onClose
+            ? `<button type="button" class="pyne-agent-header-btn" data-close title="Close" aria-label="Close PYNE Agent">×</button>`
+            : ""
+        }
+      </div>
     </div>
     <div class="pyne-agent-msgs" data-msgs></div>
     <form class="pyne-agent-form" data-form>
@@ -153,6 +482,14 @@ function mountChat(el, api, config) {
   const input = root.querySelector("[data-input]");
   const sendBtn = root.querySelector("[data-send]");
   const status = root.querySelector(".pyne-agent-status");
+  const closeBtn = root.querySelector("[data-close]");
+
+  if (closeBtn && opts.onClose) {
+    closeBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      opts.onClose?.();
+    });
+  }
 
   let sessionId = null;
   let busy = false;
@@ -161,11 +498,11 @@ function mountChat(el, api, config) {
     if (status) status.textContent = t;
   }
 
-  function addMsg(role, text, opts = {}) {
+  function addMsg(role, text, msgOpts = {}) {
     const div = document.createElement("div");
-    div.className = `pyne-agent-msg ${opts.error ? "error" : role}`;
+    div.className = `pyne-agent-msg ${msgOpts.error ? "error" : role}`;
     div.textContent = text;
-    if (opts.pine && typeof api?.insertScript === "function") {
+    if (msgOpts.pine && typeof api?.insertScript === "function") {
       const actions = document.createElement("div");
       actions.className = "pyne-agent-actions";
       const btn = document.createElement("button");
@@ -173,9 +510,9 @@ function mountChat(el, api, config) {
       btn.textContent = "Insert into editor";
       btn.addEventListener("click", () => {
         try {
-          api.insertScript(opts.pine);
+          api.insertScript(msgOpts.pine);
           setStatus("inserted");
-        } catch (e) {
+        } catch {
           setStatus("insert failed");
         }
       });
@@ -185,7 +522,7 @@ function mountChat(el, api, config) {
       copy.textContent = "Copy Pine";
       copy.addEventListener("click", async () => {
         try {
-          await navigator.clipboard.writeText(opts.pine);
+          await navigator.clipboard.writeText(msgOpts.pine);
           setStatus("copied");
         } catch {
           setStatus("copy failed");
@@ -256,40 +593,127 @@ function mountChat(el, api, config) {
   };
 }
 
-/** Best-effort floating UI when AXIS does not mount component slots yet. */
+/**
+ * Open a free-floating (non-panel) agent modal at the default position.
+ * @param {Record<string, unknown>} api
+ * @param {Record<string, unknown>} config
+ * @param {{ onClosed?: () => void }} [modalOpts]
+ * @returns {() => void} dispose / close (idempotent)
+ */
+function openFloatingModal(api, config, modalOpts = {}) {
+  const existing = document.getElementById("pyne-agent-float-root");
+  if (existing) {
+    existing.remove();
+  }
+
+  injectStyles();
+  const shell = document.createElement("div");
+  shell.className = "pyne-agent-float";
+  shell.id = "pyne-agent-float-root";
+  shell.setAttribute("role", "dialog");
+  shell.setAttribute("aria-label", "PYNE Agent");
+
+  const geo = defaultModalGeometry();
+  applyGeometry(shell, geo);
+
+  const host = document.createElement("div");
+  host.style.cssText = "flex:1;min-height:0;height:100%;display:flex;flex-direction:column;";
+  shell.appendChild(host);
+
+  const resizeEl = document.createElement("div");
+  resizeEl.className = "pyne-agent-resize";
+  resizeEl.title = "Resize";
+  resizeEl.setAttribute("aria-hidden", "true");
+  shell.appendChild(resizeEl);
+
+  document.body.appendChild(shell);
+
+  let closed = false;
+  let chromeDispose = () => {};
+  let unmount = () => {};
+
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    chromeDispose();
+    unmount();
+    shell.remove();
+    modalOpts.onClosed?.();
+  };
+
+  unmount = mountChat(host, api, config, { onClose: close, floating: true });
+  const header = host.querySelector("[data-header]");
+  if (header) {
+    chromeDispose = enableFloatChrome(shell, header, resizeEl, geo);
+  }
+
+  return close;
+}
+
+/** Compact launcher above editor bottom bars when AXIS does not mount slots. */
 function bootstrapFloating(config) {
   if (typeof document === "undefined") return () => {};
-  if (document.getElementById("pyne-agent-float-root")) return () => {};
+  if (document.getElementById("pyne-agent-fab")) return () => {};
 
   injectStyles();
   const fab = document.createElement("button");
-  fab.className = "pyne-agent-fab";
+  fab.className = "pyne-agent-launch";
   fab.type = "button";
   fab.id = "pyne-agent-fab";
-  fab.textContent = "PYNE Agent";
+  fab.setAttribute("aria-expanded", "false");
+  fab.setAttribute("aria-haspopup", "dialog");
+  fab.title = "Open PYNE Agent";
+  fab.innerHTML = `<span class="pyne-agent-launch-dot" aria-hidden="true"></span><span>Agent</span>`;
   document.body.appendChild(fab);
+  placeLauncher(fab);
 
-  let panel = null;
-  let unmount = null;
+  let closeModal = null;
+  let moTimer = 0;
+
+  const reposition = () => placeLauncher(fab);
+  window.addEventListener("resize", reposition);
+
+  // Re-place when editor dock/layout changes (throttled)
+  let layoutObs = null;
+  if (typeof MutationObserver !== "undefined") {
+    layoutObs = new MutationObserver(() => {
+      if (moTimer) return;
+      moTimer = window.setTimeout(() => {
+        moTimer = 0;
+        reposition();
+      }, 120);
+    });
+    layoutObs.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
+  }
 
   fab.addEventListener("click", () => {
-    if (panel) {
-      unmount?.();
-      panel.remove();
-      panel = null;
-      unmount = null;
+    if (closeModal) {
+      closeModal();
       return;
     }
-    panel = document.createElement("div");
-    panel.className = "pyne-agent-float";
-    panel.id = "pyne-agent-float-root";
-    document.body.appendChild(panel);
-    unmount = mountChat(panel, { getConfig: () => config || {} }, config);
+    closeModal = openFloatingModal(
+      { getConfig: () => config || {} },
+      config,
+      {
+        onClosed: () => {
+          closeModal = null;
+          fab.setAttribute("aria-expanded", "false");
+        },
+      }
+    );
+    fab.setAttribute("aria-expanded", "true");
   });
 
   return () => {
-    unmount?.();
-    panel?.remove();
+    if (closeModal) closeModal();
+    window.removeEventListener("resize", reposition);
+    if (moTimer) clearTimeout(moTimer);
+    layoutObs?.disconnect();
     fab.remove();
   };
 }
@@ -298,7 +722,7 @@ const plugin = {
   id: "pyne-agent",
   name: "PYNE Agent",
   kind: "component",
-  version: "0.1.2",
+  version: "0.1.3",
   description:
     "Natural-language PYNE script authoring via Cloudflare® Workers AI™ and a private Vectorize™ knowledge base (v5/v6 docs + open corpus). AXIS sister plugin for HOOX / PYNE.",
   builtIn: false,
@@ -349,37 +773,41 @@ const plugin = {
       el.innerHTML = "";
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = "PYNE Agent";
+      btn.className = "pyne-agent-launch";
+      btn.style.position = "static";
+      btn.style.boxShadow = "none";
+      btn.innerHTML = `<span class="pyne-agent-launch-dot" aria-hidden="true"></span><span>Agent</span>`;
       btn.title = "Open PYNE Agent chat";
-      let open = null;
+      btn.setAttribute("aria-expanded", "false");
+      btn.setAttribute("aria-haspopup", "dialog");
+      injectStyles();
+      let closeModal = null;
       btn.addEventListener("click", () => {
-        if (open) {
-          open();
-          open = null;
+        if (closeModal) {
+          closeModal();
           return;
         }
-        const host = document.createElement("div");
-        host.style.cssText =
-          "position:fixed;right:16px;bottom:56px;z-index:99999;width:min(420px,calc(100vw - 24px));height:min(560px,calc(100vh - 80px));";
-        document.body.appendChild(host);
-        const stop = mountChat(host, api, config);
-        open = () => {
-          stop();
-          host.remove();
-        };
+        closeModal = openFloatingModal(api, config, {
+          onClosed: () => {
+            closeModal = null;
+            btn.setAttribute("aria-expanded", "false");
+          },
+        });
+        btn.setAttribute("aria-expanded", "true");
       });
       el.appendChild(btn);
       return () => {
+        if (closeModal) closeModal();
         el.innerHTML = "";
       };
     }
-    // manager-tab / settings-section → full chat panel
+    // manager-tab / settings-section → full chat (embedded, no float chrome)
     return mountChat(el, api, config);
   },
 
   async init(ctx) {
     const config = ctx?.getConfig?.() || {};
-    // If AXIS never calls mount (component phase 2), still offer a FAB.
+    // If AXIS never calls mount (component phase 2), still offer a compact launcher.
     if (typeof document !== "undefined" && !config.disableFloating) {
       this._floatDispose = bootstrapFloating(config);
     }
@@ -396,4 +824,4 @@ const plugin = {
 };
 
 export default plugin;
-export { plugin, mountChat };
+export { plugin, mountChat, openFloatingModal };

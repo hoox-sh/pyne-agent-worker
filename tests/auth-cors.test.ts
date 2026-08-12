@@ -35,15 +35,22 @@ describe("auth", () => {
 });
 
 describe("cors", () => {
-  test("parseOrigins", () => {
-    expect(parseOrigins("a, b")).toEqual(["a", "b"]);
+  test("parseOrigins merges defaults", () => {
+    const o = parseOrigins("https://custom.example");
+    expect(o).toContain("https://custom.example");
+    expect(o).toContain("https://axis.hoox.sh");
   });
 
   test("reflects allowlisted origin", () => {
     const req = new Request("https://x", {
-      headers: { Origin: "https://hoox.sh/axis" },
+      headers: { Origin: "https://axis.hoox.sh" },
     });
-    const h = corsHeaders(req, ["https://hoox.sh/axis", "http://localhost:8081"]);
-    expect(h["Access-Control-Allow-Origin"]).toBe("https://hoox.sh/axis");
+    const h = corsHeaders(req, ["https://axis.hoox.sh", "http://localhost:8081"]);
+    expect(h["Access-Control-Allow-Origin"]).toBe("https://axis.hoox.sh");
+  });
+
+  test("plugin CORS is wildcard for dynamic import", async () => {
+    const { pluginCorsHeaders } = await import("../src/lib/cors");
+    expect(pluginCorsHeaders()["Access-Control-Allow-Origin"]).toBe("*");
   });
 });

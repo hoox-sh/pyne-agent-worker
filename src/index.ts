@@ -12,7 +12,7 @@
  */
 
 import { requireAuth } from "./lib/auth";
-import { withCors } from "./lib/cors";
+import { pluginCorsHeaders, withCors } from "./lib/cors";
 import { errorJson, json } from "./lib/json";
 import { DISCLAIMER_SHORT } from "./lib/legal";
 import { handleChat } from "./routes/chat";
@@ -29,11 +29,57 @@ function notFound(): Response {
   return errorJson(404, "Not found");
 }
 
+function isPluginPath(path: string): boolean {
+  return (
+    path === "/plugin/axis-pine-agent.js" ||
+    path === "/plugins/axis-pine-agent.js"
+  );
+}
+
+/** Public ES module for AXIS dynamic import() — must send CORS. */
+async function servePlugin(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const headers = new Headers(pluginCorsHeaders());
+  headers.set("Content-Type", "text/javascript; charset=utf-8");
+  headers.set("Cache-Control", "public, max-age=300");
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Method Not Allowed", { status: 405, headers });
+  }
+
+  if (env.ASSETS) {
+    const assetReq = new Request(
+      new URL("/plugin/axis-pine-agent.js", request.url),
+      { method: "GET" }
+    );
+    const res = await env.ASSETS.fetch(assetReq);
+    if (res.ok) {
+      const body = request.method === "HEAD" ? null : res.body;
+      return new Response(body, { status: 200, headers });
+    }
+  }
+  return errorJson(
+    404,
+    "Plugin asset not found — ensure public/plugin is deployed"
+  );
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
 
-  // CORS preflight
+  // AXIS plugin must be Worker-handled (not bare ASSETS) so CORS is applied.
+  // Dynamic import() of cross-origin modules requires Access-Control-Allow-Origin.
+  if (isPluginPath(path)) {
+    return servePlugin(request, env);
+  }
+
+  // CORS preflight (API)
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204 });
   }
@@ -66,28 +112,6 @@ async function route(request: Request, env: Env): Promise<Response> {
       },
       disclaimer: DISCLAIMER_SHORT,
     });
-  }
-
-  // Serve AXIS plugin from bundled public/ (or repo plugin/ via assets)
-  if (
-    (path === "/plugin/axis-pine-agent.js" ||
-      path === "/plugins/axis-pine-agent.js") &&
-    request.method === "GET"
-  ) {
-    if (env.ASSETS) {
-      const assetReq = new Request(
-        new URL("/plugin/axis-pine-agent.js", request.url),
-        request
-      );
-      const res = await env.ASSETS.fetch(assetReq);
-      if (res.ok) {
-        const headers = new Headers(res.headers);
-        headers.set("Content-Type", "text/javascript; charset=utf-8");
-        headers.set("Cache-Control", "public, max-age=300");
-        return new Response(res.body, { status: 200, headers });
-      }
-    }
-    return errorJson(404, "Plugin asset not found — ensure public/plugin is deployed");
   }
 
   // Auth gate for API
