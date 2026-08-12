@@ -113,25 +113,111 @@ function injectStyles() {
       min-height: 0;
     }
     .pyne-agent-msg {
-      max-width: 92%; padding: 7px 9px; border-radius: var(--radius-input, 3px);
-      font-size: 12px; line-height: 1.45;
-      white-space: pre-wrap; word-break: break-word;
+      max-width: 96%; padding: 8px 10px; border-radius: var(--radius-input, 3px);
+      font-size: 12px; line-height: 1.5;
+      word-break: break-word;
     }
     .pyne-agent-msg.user {
       align-self: flex-end;
+      white-space: pre-wrap;
       background: color-mix(in srgb, var(--color-accent, #2563eb) 28%, var(--color-bg-elev, #1d4f7c));
       color: var(--color-text, #e8eaed);
     }
     .pyne-agent-msg.assistant {
-      align-self: flex-start;
+      align-self: stretch;
+      max-width: 100%;
       background: var(--color-bg-elev, #1a222c);
       border: 1px solid var(--color-border-soft, #2a3441);
     }
     .pyne-agent-msg.error {
       align-self: stretch;
+      white-space: pre-wrap;
       background: color-mix(in srgb, var(--color-red, #7f1d1d) 18%, var(--color-bg-panel, #3a1515));
       border: 1px solid color-mix(in srgb, var(--color-red, #7f1d1d) 55%, transparent);
       color: var(--color-red, #fecaca);
+    }
+    .pyne-agent-prose {
+      white-space: pre-wrap;
+      margin: 0 0 8px;
+    }
+    .pyne-agent-prose:last-child { margin-bottom: 0; }
+    .pyne-agent-codebox {
+      margin: 8px 0 0;
+      border: 1px solid var(--color-border, #3a3d4a);
+      border-radius: var(--radius-input, 3px);
+      background: var(--color-bg-base, #0a0b10);
+      overflow: hidden;
+    }
+    .pyne-agent-codebox:first-child { margin-top: 0; }
+    .pyne-agent-codebox-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      padding: 4px 8px;
+      background: color-mix(in srgb, var(--color-bg-elev, #171821) 80%, var(--color-bg-base, #0a0b10));
+      border-bottom: 1px solid var(--color-border-soft, #252730);
+      font-size: 10px;
+      color: var(--color-text-dim, #8b8e9c);
+      user-select: none;
+    }
+    .pyne-agent-codebox-lang {
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--color-accent, #5b7cfa);
+    }
+    .pyne-agent-codebox pre {
+      margin: 0;
+      padding: 8px 10px;
+      max-height: min(280px, 40vh);
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--color-text, #eceef4);
+      white-space: pre;
+      tab-size: 2;
+    }
+    .pyne-agent-codebox code {
+      font-family: inherit;
+      font-size: inherit;
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+    .pyne-agent-codebox-actions {
+      display: flex; flex-wrap: wrap; gap: 4px;
+      padding: 6px 8px;
+      border-top: 1px solid var(--color-border-soft, #252730);
+      background: var(--color-bg-elev, #171821);
+    }
+    .pyne-agent-codebox-actions button {
+      background: var(--color-bg-hover, #22232e);
+      color: var(--color-text, #e8eaed);
+      border: 1px solid var(--color-border, #3a4a5c);
+      border-radius: var(--radius-input, 3px);
+      padding: 3px 8px; font-size: 10.5px; font-weight: 500; cursor: pointer;
+      line-height: 1.3;
+    }
+    .pyne-agent-codebox-actions button:hover {
+      border-color: var(--color-accent, #5b7cfa);
+      color: var(--color-accent, #5b7cfa);
+    }
+    .pyne-agent-codebox-actions button.is-primary {
+      background: color-mix(in srgb, var(--color-accent, #5b7cfa) 18%, var(--color-bg-elev, #171821));
+      border-color: var(--color-accent, #5b7cfa);
+      color: var(--color-accent, #5b7cfa);
+    }
+    .pyne-agent-codebox-actions button.is-primary:hover {
+      background: color-mix(in srgb, var(--color-accent-hover, #4a6ae8) 28%, var(--color-bg-elev, #171821));
+      border-color: var(--color-accent-hover, #4a6ae8);
+      color: var(--color-accent-hover, #4a6ae8);
+    }
+    .pyne-agent-inline-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.92em;
+      padding: 0.05em 0.3em;
+      border-radius: var(--radius-chip, 2px);
+      background: color-mix(in srgb, var(--color-bg-base, #0a0b10) 70%, transparent);
+      border: 1px solid var(--color-border-soft, #252730);
     }
     .pyne-agent-form {
       display: flex; gap: 8px; padding: 8px 10px;
@@ -165,18 +251,6 @@ function injectStyles() {
       color: var(--color-accent-hover, #4a6ae8);
     }
     .pyne-agent-form button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .pyne-agent-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-    .pyne-agent-actions button {
-      background: var(--color-bg-hover, #243041);
-      color: var(--color-text, #e8eaed);
-      border: 1px solid var(--color-border, #3a4a5c);
-      border-radius: var(--radius-input, 3px);
-      padding: 3px 7px; font-size: 11px; cursor: pointer;
-    }
-    .pyne-agent-actions button:hover {
-      border-color: var(--color-accent, #5b7cfa);
-      color: var(--color-accent, #5b7cfa);
-    }
     .pyne-agent-legal {
       font-size: 9px; color: var(--color-text-faint, #6b7785);
       padding: 0 10px 6px; flex-shrink: 0;
@@ -434,6 +508,129 @@ function enableFloatChrome(shell, header, resizeEl, geo) {
   };
 }
 
+/** Extract title-ish name from Pine source for new tabs. */
+function scriptNameFromPine(code) {
+  const src = String(code || "");
+  const m =
+    src.match(/\b(?:indicator|strategy|library)\s*\(\s*["']([^"']+)["']/) ||
+    src.match(/\/\/\s*@?\s*title\s*[:=]\s*(.+)/i);
+  if (m?.[1]) {
+    const name = m[1].trim().slice(0, 48);
+    if (name) return name;
+  }
+  return "Agent script";
+}
+
+/** True when a fenced block looks like Pine / PYNE source. */
+function looksLikePine(code, lang) {
+  const l = String(lang || "").toLowerCase();
+  if (/^(pine|pinescript|pine-script|pyne)$/.test(l)) return true;
+  const s = String(code || "");
+  return (
+    /\/\/\s*@version\s*=\s*[56]/i.test(s) ||
+    /\b(indicator|strategy|library)\s*\(/.test(s)
+  );
+}
+
+/**
+ * Split markdown-ish reply into prose + fenced code segments.
+ * @returns {Array<{ type: 'text' | 'code', text?: string, code?: string, lang?: string }>}
+ */
+function parseReplySegments(text) {
+  const raw = String(text || "");
+  /** @type {Array<{ type: 'text' | 'code', text?: string, code?: string, lang?: string }>} */
+  const parts = [];
+  const re = /```([^\n`]*)\n([\s\S]*?)```/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    if (m.index > last) {
+      const prose = raw.slice(last, m.index).trim();
+      if (prose) parts.push({ type: "text", text: prose });
+    }
+    const lang = String(m[1] || "").trim();
+    const code = String(m[2] || "").replace(/\n$/, "");
+    parts.push({ type: "code", code, lang });
+    last = m.index + m[0].length;
+  }
+  if (last < raw.length) {
+    const prose = raw.slice(last).trim();
+    if (prose) parts.push({ type: "text", text: prose });
+  }
+  if (!parts.length && raw.trim()) {
+    parts.push({ type: "text", text: raw.trim() });
+  }
+  return parts;
+}
+
+/** Light inline formatting: `code` → span (escape HTML). */
+function fillProse(el, text) {
+  el.textContent = "";
+  const s = String(text || "");
+  const re = /`([^`\n]+)`/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > last) el.appendChild(document.createTextNode(s.slice(last, m.index)));
+    const code = document.createElement("code");
+    code.className = "pyne-agent-inline-code";
+    code.textContent = m[1];
+    el.appendChild(code);
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) el.appendChild(document.createTextNode(s.slice(last)));
+}
+
+/**
+ * Push Pine into AXIS editor via host API or CustomEvent bridge.
+ * @param {'insert' | 'open'} mode
+ * @param {string} code
+ * @param {Record<string, unknown>} api
+ * @param {string} [name]
+ */
+function deliverScript(mode, code, api, name) {
+  const pine = String(code || "");
+  if (!pine.trim()) throw new Error("empty script");
+  const title = name || scriptNameFromPine(pine);
+
+  if (mode === "insert") {
+    if (typeof api?.insertScript === "function") {
+      api.insertScript(pine);
+      return "inserted";
+    }
+    if (typeof api?.setScript === "function") {
+      api.setScript(pine);
+      return "inserted";
+    }
+  } else {
+    if (typeof api?.openScript === "function") {
+      api.openScript(pine, { name: title });
+      return "opened";
+    }
+    if (typeof api?.newScript === "function") {
+      api.newScript(pine, { name: title });
+      return "opened";
+    }
+    if (typeof api?.openNewScript === "function") {
+      api.openNewScript(pine, title);
+      return "opened";
+    }
+  }
+
+  // AXIS host bridge (tabbed editor listens for these)
+  const eventName =
+    mode === "insert" ? "axis-agent-insert-script" : "axis-agent-open-script";
+  if (typeof window !== "undefined" && typeof CustomEvent === "function") {
+    window.dispatchEvent(
+      new CustomEvent(eventName, {
+        detail: { code: pine, name: title, source: "pyne-agent" },
+      })
+    );
+    return mode === "insert" ? "inserted" : "opened";
+  }
+  throw new Error("no editor host");
+}
+
 /**
  * Mount chat UI into a host element.
  * @param {HTMLElement} el
@@ -443,7 +640,6 @@ function enableFloatChrome(shell, header, resizeEl, geo) {
  */
 function mountChat(el, api, config, opts = {}) {
   injectStyles();
-  const conf = cfg({ ...cfg(api?.getConfig?.() || {}), ...(config || {}) });
   el.innerHTML = "";
   el.classList.add("pyne-agent-host");
 
@@ -498,39 +694,127 @@ function mountChat(el, api, config, opts = {}) {
     if (status) status.textContent = t;
   }
 
-  function addMsg(role, text, msgOpts = {}) {
-    const div = document.createElement("div");
-    div.className = `pyne-agent-msg ${msgOpts.error ? "error" : role}`;
-    div.textContent = text;
-    if (msgOpts.pine && typeof api?.insertScript === "function") {
-      const actions = document.createElement("div");
-      actions.className = "pyne-agent-actions";
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = "Insert into editor";
-      btn.addEventListener("click", () => {
+  /**
+   * @param {string} code
+   * @param {string} [lang]
+   * @param {{ pineActions?: boolean }} [boxOpts]
+   */
+  function buildCodeBox(code, lang, boxOpts = {}) {
+    const box = document.createElement("div");
+    box.className = "pyne-agent-codebox";
+
+    const bar = document.createElement("div");
+    bar.className = "pyne-agent-codebox-bar";
+    const langEl = document.createElement("span");
+    langEl.className = "pyne-agent-codebox-lang";
+    const isPine = looksLikePine(code, lang);
+    langEl.textContent = isPine
+      ? "pine"
+      : String(lang || "code").trim() || "code";
+    const meta = document.createElement("span");
+    const lines = String(code).split("\n").length;
+    meta.textContent = `${lines} line${lines === 1 ? "" : "s"}`;
+    bar.appendChild(langEl);
+    bar.appendChild(meta);
+    box.appendChild(bar);
+
+    const pre = document.createElement("pre");
+    const codeEl = document.createElement("code");
+    codeEl.textContent = code;
+    pre.appendChild(codeEl);
+    box.appendChild(pre);
+
+    const actions = document.createElement("div");
+    actions.className = "pyne-agent-codebox-actions";
+
+    if (boxOpts.pineActions !== false && isPine) {
+      const insertBtn = document.createElement("button");
+      insertBtn.type = "button";
+      insertBtn.className = "is-primary";
+      insertBtn.textContent = "Add to editor";
+      insertBtn.title = "Replace the active editor tab with this script";
+      insertBtn.addEventListener("click", () => {
         try {
-          api.insertScript(msgOpts.pine);
-          setStatus("inserted");
+          setStatus(deliverScript("insert", code, api));
         } catch {
           setStatus("insert failed");
         }
       });
-      actions.appendChild(btn);
-      const copy = document.createElement("button");
-      copy.type = "button";
-      copy.textContent = "Copy Pine";
-      copy.addEventListener("click", async () => {
+      actions.appendChild(insertBtn);
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.textContent = "Open in new script";
+      openBtn.title = "Open this script in a new editor tab";
+      openBtn.addEventListener("click", () => {
         try {
-          await navigator.clipboard.writeText(msgOpts.pine);
-          setStatus("copied");
+          setStatus(deliverScript("open", code, api));
         } catch {
-          setStatus("copy failed");
+          setStatus("open failed");
         }
       });
-      actions.appendChild(copy);
-      div.appendChild(actions);
+      actions.appendChild(openBtn);
     }
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.textContent = "Copy";
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(code);
+        setStatus("copied");
+      } catch {
+        setStatus("copy failed");
+      }
+    });
+    actions.appendChild(copyBtn);
+    box.appendChild(actions);
+    return box;
+  }
+
+  function addMsg(role, text, msgOpts = {}) {
+    const div = document.createElement("div");
+    div.className = `pyne-agent-msg ${msgOpts.error ? "error" : role}`;
+
+    if (role !== "assistant" || msgOpts.error) {
+      div.textContent = text;
+      msgs.appendChild(div);
+      msgs.scrollTop = msgs.scrollHeight;
+      return;
+    }
+
+    // Formatted assistant reply: prose + monospace code boxes
+    let segments = parseReplySegments(text);
+    const pineExtra = msgOpts.pine ? String(msgOpts.pine).trim() : "";
+    const hasPineFence = segments.some(
+      (s) => s.type === "code" && looksLikePine(s.code, s.lang)
+    );
+
+    // If API returned extracted pine but the reply had no fence, attach a box
+    if (pineExtra && !hasPineFence) {
+      segments = [...segments, { type: "code", code: pineExtra, lang: "pine" }];
+    }
+
+    // Deduplicate: if fence body matches extracted pine, keep fence only
+    if (pineExtra && hasPineFence) {
+      /* already in segments */
+    }
+
+    if (!segments.length) {
+      div.textContent = text || "(empty)";
+    } else {
+      for (const seg of segments) {
+        if (seg.type === "text") {
+          const p = document.createElement("div");
+          p.className = "pyne-agent-prose";
+          fillProse(p, seg.text || "");
+          div.appendChild(p);
+        } else if (seg.type === "code") {
+          div.appendChild(buildCodeBox(seg.code || "", seg.lang || ""));
+        }
+      }
+    }
+
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
   }
@@ -722,7 +1006,7 @@ const plugin = {
   id: "pyne-agent",
   name: "PYNE Agent",
   kind: "component",
-  version: "0.1.3",
+  version: "0.1.4",
   description:
     "Natural-language PYNE script authoring via Cloudflare® Workers AI™ and a private Vectorize™ knowledge base (v5/v6 docs + open corpus). AXIS sister plugin for HOOX / PYNE.",
   builtIn: false,
@@ -824,4 +1108,12 @@ const plugin = {
 };
 
 export default plugin;
-export { plugin, mountChat, openFloatingModal };
+export {
+  plugin,
+  mountChat,
+  openFloatingModal,
+  parseReplySegments,
+  looksLikePine,
+  scriptNameFromPine,
+  deliverScript,
+};
