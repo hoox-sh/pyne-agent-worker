@@ -4,12 +4,32 @@
 // Minimal Env typings for pyne-agent-worker.
 // Prefer regenerating with `npx wrangler types` after binding changes.
 
+/** AI Search instance surface used by knowledge search (subset). */
+interface AiSearchInstance {
+  search(opts: {
+    messages: Array<{ role: string; content: string }>;
+    max_num_results?: number;
+  }): Promise<unknown>;
+}
+
+interface AiSearchNamespace {
+  get(id: string): AiSearchInstance;
+  create?(opts: { id: string; [k: string]: unknown }): Promise<AiSearchInstance>;
+}
+
 interface Env {
   AI: Ai;
   VECTORIZE: VectorizeIndex;
   KB: R2Bucket;
   DB: D1Database;
   ASSETS?: Fetcher;
+
+  /** Managed hybrid RAG (optional; Vectorize is the fallback). */
+  AI_SEARCH?: AiSearchNamespace;
+
+  /** Agents SDK Durable Object namespaces */
+  PyneAgent: DurableObjectNamespace;
+  PyneMcp: DurableObjectNamespace;
 
   /** Optional service binding to sister pyne-worker (POST /run). */
   PYNE_SERVICE?: Fetcher;
@@ -22,10 +42,14 @@ interface Env {
   SERVICE_NAME: string;
   SERVICE_VERSION: string;
   CHAT_MODEL: string;
+  /** Optional smaller/faster model when primary fails. */
+  CHAT_MODEL_FALLBACK?: string;
   EMBED_MODEL: string;
   RAG_TOP_K: string;
   CORPUS_MAX_SCRIPTS: string;
   ALLOWED_ORIGINS: string;
+  /** Optional Cloudflare AI Gateway id for attribution / caching. */
+  AI_GATEWAY_ID?: string;
   /** HTTPS origin of pyne-worker when service binding is unavailable. */
   PYNE_WORKER_URL?: string;
   /** Default true — run generate→validate→retry when pyne-worker is configured. */

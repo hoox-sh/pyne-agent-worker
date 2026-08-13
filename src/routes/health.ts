@@ -16,8 +16,11 @@ export async function handleHealth(env: Env): Promise<Response> {
   const checks: Record<string, string> = {
     ai: env.AI ? "ok" : "missing",
     vectorize: env.VECTORIZE ? "ok" : "optional_missing",
+    ai_search: env.AI_SEARCH ? "ok" : "optional_missing",
     r2: env.KB ? "ok" : "optional_missing",
     d1: env.DB ? "ok" : "optional_missing",
+    agents_do: env.PyneAgent ? "ok" : "optional_missing",
+    mcp_do: env.PyneMcp ? "ok" : "optional_missing",
     pyne_worker: isValidateAvailable(env)
       ? env.PYNE_SERVICE
         ? "service_binding"
@@ -44,11 +47,19 @@ export async function handleHealth(env: Env): Promise<Response> {
       ok: healthy,
       mode,
       service: env.SERVICE_NAME || "pyne-agent-worker",
-      version: env.SERVICE_VERSION || "0.1.2",
+      version: env.SERVICE_VERSION || "0.2.0",
       checks,
+      surfaces: {
+        rest_chat: "POST /v1/chat",
+        agents_sdk: "WS /agents/pyne-agent/:session",
+        mcp: "POST /mcp",
+        plugin: "GET /plugin/axis-pine-agent.js",
+      },
       models: {
         chat: chatModel(env),
+        fallback: (env.CHAT_MODEL_FALLBACK || "").trim() || null,
         embed: embedModel(env),
+        ai_gateway: (env.AI_GATEWAY_ID || "").trim() || null,
       },
       validation: {
         // Requested by default, but auto-skipped when pyne-worker is absent.

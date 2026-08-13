@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PYNE Agent · streaming shell</title>
+    <style>
+      :root {
+        --bg: #0a0b10;
+        --panel: #111218;
+        --elev: #171821;
+        --border: #3a3d4a;
+        --text: #eceef4;
+        --dim: #8b8e9c;
+        --accent: #5b7cfa;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      header h1 { margin: 0; font-size: 14px; font-weight: 600; }
+      header small { color: var(--dim); }
+      #session {
+        flex: 1;
+        min-width: 140px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 3px;
+        padding: 6px 8px;
+      }
+      #log {
+        flex: 1;
+        overflow: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .msg {
+        max-width: 48rem;
+        padding: 10px 12px;
+        border-radius: 3px;
+        border: 1px solid var(--border);
+        background: var(--elev);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .msg.user { align-self: flex-end; border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+      .msg.sys { color: var(--dim); font-size: 12px; border-style: dashed; }
+      form {
+        display: flex;
+        gap: 8px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+        background: var(--panel);
+      }
+      textarea {
+        flex: 1;
+        min-height: 56px;
+        resize: vertical;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 8px;
+        font: inherit;
+      }
+      button {
+        align-self: flex-end;
+        background: color-mix(in srgb, var(--accent) 22%, var(--elev));
+        color: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: 3px;
+        padding: 8px 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+      }
+      .legal { font-size: 10px; color: var(--dim); padding: 0 16px 10px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>PYNE Agent</h1>
+      <small>Agents SDK · Workers AI™ · session-scoped DO</small>
+      <input id="session" type="text" spellcheck="false" />
+      <button type="button" id="new-session">New session</button>
+    </header>
+    <div id="log"></div>
+    <form id="form">
+      <textarea
+        id="input"
+        placeholder="e.g. RSI divergence strategy with ATR stops (Pine v6)"
+      ></textarea>
+      <button type="submit" id="send">Send</button>
+    </form>
+    <div class="legal">
+      Pine Script™ and TradingView® are trademarks of TradingView, Inc.
+      Cloudflare® is a registered trademark of Cloudflare, Inc.
+      Independent project — not affiliated with TradingView® or Cloudflare®.
+      Full streaming UI uses <code>useAgentChat</code> in AXIS; this shell exercises REST fallback for demos.
+    </div>
+    <script>
+      const log = document.getElementById("log");
+      const form = document.getElementById("form");
+      const input = document.getElementById("input");
+      const send = document.getElementById("send");
+      const sessionEl = document.getElementById("session");
+
+      function sid() {
+        return (
+          crypto.randomUUID?.() ||
+          "s_" + Math.random().toString(36).slice(2) + Date.now().toString(36)
+        );
+      }
+      sessionEl.value = localStorage.getItem("pyne-agent-session") || sid();
+      localStorage.setItem("pyne-agent-session", sessionEl.value);
+
+      document.getElementById("new-session").onclick = () => {
+        sessionEl.value = sid();
+        localStorage.setItem("pyne-agent-session", sessionEl.value);
+        add("sys", "New session: " + sessionEl.value);
+      };
+
+      function add(role, text) {
+        const el = document.createElement("div");
+        el.className = "msg " + role;
+        el.textContent = text;
+        log.appendChild(el);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      add(
+        "sys",
+        "REST demo shell. Prefer AXIS plugin or a React useAgentChat client for true WebSocket streaming to /agents/pyne-agent/:session.\nSession: " +
+          sessionEl.value
+      );
+
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        add("user", text);
+        input.value = "";
+        send.disabled = true;
+        try {
+          // Legacy REST path remains the zero-dep demo; Agents WS needs party client.
+          const res = await fetch("/v1/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: text,
+              session_id: sessionEl.value,
+              pine_version: "v6",
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+          add("assistant", data.reply || JSON.stringify(data, null, 2));
+        } catch (e) {
+          add("sys", "Error: " + (e && e.message ? e.message : String(e)));
+        } finally {
+          send.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

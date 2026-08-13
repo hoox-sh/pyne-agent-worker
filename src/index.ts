@@ -4,13 +4,15 @@
 /**
  * pyne-agent-worker — Cloudflare® Worker
  *
- * Natural-language PYNE coding agent for AXIS / HOOX / PYNE.
- * Uses Workers AI™ + Vectorize™ RAG over operator-ingested v5/v6 docs,
- * open corpus (≤1000), and operator-supplied built-in references.
+ * Dual surface:
+ * 1) **Agents SDK** — `PyneAgent` (AIChatAgent + SQLite DO) + `PyneMcp` (MCP tools)
+ * 2) **Legacy REST** — POST /v1/chat, Vectorize search, D1 sessions (standalone)
  *
+ * Knowledge: optional AI Search hybrid + Vectorize/R2 fallback.
  * This repository never ships TradingView® built-in source files.
  */
 
+import { routeAgentRequest } from "agents";
 import { requireAuth } from "./lib/auth";
 import { pluginCorsHeaders, withCors } from "./lib/cors";
 import { errorJson, json } from "./lib/json";
@@ -24,6 +26,11 @@ import {
   getSession,
   listMessages,
 } from "./rag/sessions";
+import { PyneAgent } from "./agent/pyne-agent";
+import { PyneMcp } from "./mcp/pyne-mcp";
+
+// Durable Object class exports (required by wrangler bindings)
+export { PyneAgent, PyneMcp };
 
 function notFound(): Response {
   return errorJson(404, "Not found");
@@ -69,19 +76,39 @@ async function servePlugin(
   );
 }
 
-async function route(request: Request, env: Env): Promise<Response> {
+async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
 
   // AXIS plugin must be Worker-handled (not bare ASSETS) so CORS is applied.
-  // Dynamic import() of cross-origin modules requires Access-Control-Allow-Origin.
   if (isPluginPath(path)) {
     return servePlugin(request, env);
   }
 
-  // CORS preflight (API)
+  // CORS preflight
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204 });
+  }
+
+  // MCP streamable HTTP (optional auth when API_KEY set)
+  if (path === "/mcp" || path.startsWith("/mcp/")) {
+    if (env.API_KEY) {
+      const auth = requireAuth(request, env);
+      if (!auth.ok) return errorJson(auth.status, auth.error);
+    }
+    return PyneMcp.serve("/mcp", { binding: "PyneMcp" }).fetch(request, env, ctx);
+  }
+
+  // Agents SDK routing: /agents/pyne-agent/:sessionId (WebSocket + HTTP)
+  if (path.startsWith("/agents/")) {
+    // Optional auth gate for agent sessions when API_KEY is configured
+    if (env.API_KEY && request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+      const auth = requireAuth(request, env);
+      if (!auth.ok) return errorJson(auth.status, auth.error);
+    }
+    const agentRes = await routeAgentRequest(request, env);
+    if (agentRes) return agentRes;
+    return errorJson(404, "Agent route not found");
   }
 
   // Public health
@@ -100,21 +127,24 @@ async function route(request: Request, env: Env): Promise<Response> {
     }
     return json({
       service: env.SERVICE_NAME || "pyne-agent-worker",
-      version: env.SERVICE_VERSION || "0.1.0",
+      version: env.SERVICE_VERSION || "0.2.0",
       description:
-        "Natural-language Pine Script™ agent (Cloudflare® Workers AI™ + Vectorize™ RAG). AXIS sister plugin.",
+        "Natural-language Pine Script™ agent (Cloudflare® Agents SDK + Workers AI™ + RAG). AXIS sister plugin.",
       endpoints: {
         health: "GET /health",
         chat: "POST /v1/chat",
+        agent: "WebSocket /agents/pyne-agent/:session",
+        mcp: "POST /mcp",
         search: "GET|POST /v1/search",
         sessions: "POST /v1/sessions, GET /v1/sessions/:id",
         plugin: "GET /plugin/axis-pine-agent.js",
+        agentUi: "GET /agent.html",
       },
       disclaimer: DISCLAIMER_SHORT,
     });
   }
 
-  // Auth gate for API
+  // Auth gate for legacy REST API
   const auth = requireAuth(request, env);
   if (!auth.ok) return errorJson(auth.status, auth.error);
 
@@ -177,9 +207,13 @@ async function route(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<Response> {
     try {
-      const res = await route(request, env);
+      const res = await route(request, env, ctx);
       return withCors(request, env, res);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

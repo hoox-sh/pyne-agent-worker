@@ -4,7 +4,8 @@
   // Set your Cloudflare® account_id or rely on wrangler login defaults.
   // "account_id": "YOUR_ACCOUNT_ID",
   "main": "src/index.ts",
-  "compatibility_date": "2026-07-24",
+  // AI Search namespace binding requires >= 2026-03-27
+  "compatibility_date": "2026-07-30",
   "compatibility_flags": ["nodejs_compat"],
   "placement": { "mode": "smart" },
   "observability": {
@@ -15,6 +16,9 @@
       "head_sampling_rate": 1,
       "persist": true,
       "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true
     }
   },
 
@@ -23,10 +27,19 @@
     "binding": "AI"
   },
 
-  // Vectorize™ index for Pine Script™ knowledge RAG
-  // Create once:
+  // Optional managed hybrid RAG (AI Search). Falls back to Vectorize if unused.
+  // Dashboard: create namespace + instance id "pyne-pine-kb", or create via API.
+  // "remote": true so wrangler dev proxies to the deployed instance.
+  "ai_search_namespaces": [
+    {
+      "binding": "AI_SEARCH",
+      "namespace": "default",
+      "remote": true
+    }
+  ],
+
+  // Vectorize™ index for Pine Script™ knowledge RAG (BYO embeddings fallback)
   //   npx wrangler vectorize create pyne-agent-kb --dimensions=768 --metric=cosine
-  // Then paste the index name (not id) below.
   "vectorize": [
     {
       "binding": "VECTORIZE",
@@ -36,7 +49,6 @@
 
   // R2: raw knowledge documents (docs / corpus chunks / operator builtins).
   // Never commit those files to git — only live in R2.
-  //   npx wrangler r2 bucket create pyne-agent-kb
   "r2_buckets": [
     {
       "binding": "KB",
@@ -45,9 +57,7 @@
     }
   ],
 
-  // Optional D1 for chat session history
-  //   npx wrangler d1 create pyne-agent-sessions
-  //   npx wrangler d1 execute pyne-agent-sessions --remote --file=schemas/sessions.sql
+  // Optional D1 for legacy REST chat session history
   "d1_databases": [
     {
       "binding": "DB",
@@ -56,38 +66,55 @@
     }
   ],
 
-  // Static assets (AXIS plugin + simple chat shell).
-  // Plugin routes must hit the Worker first so CORS headers are applied
-  // (browser dynamic import() of cross-origin modules requires ACAO).
+  // Agents SDK Durable Objects (SQLite-backed)
+  "durable_objects": {
+    "bindings": [
+      { "name": "PyneAgent", "class_name": "PyneAgent" },
+      { "name": "PyneMcp", "class_name": "PyneMcp" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-agents-sdk",
+      "new_sqlite_classes": ["PyneAgent", "PyneMcp"]
+    }
+  ],
+
+  // Static assets (AXIS plugin + chat shells).
+  // Worker-first for API / agents / MCP / plugin CORS.
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/plugin/*", "/plugins/*", "/health", "/v1/*"]
+    "run_worker_first": [
+      "/plugin/*",
+      "/plugins/*",
+      "/health",
+      "/v1/*",
+      "/agents/*",
+      "/mcp",
+      "/mcp/*"
+    ]
   },
 
   // Optional: sister pyne-worker for generate→validate→retry (NOT required).
-  // Standalone mode works with AI only — do not enable this unless you run HOOX/pyne-worker.
   // "services": [
   //   { "binding": "PYNE_SERVICE", "service": "pyne-worker" }
   // ],
 
   "vars": {
     "SERVICE_NAME": "pyne-agent-worker",
-    "SERVICE_VERSION": "0.1.2",
-    // Workers AI model ids (override via env / dashboard vars)
+    "SERVICE_VERSION": "0.2.0",
     "CHAT_MODEL": "@cf/qwen/qwen2.5-coder-32b-instruct",
+    // Faster/smaller fallback when primary times out
+    "CHAT_MODEL_FALLBACK": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "EMBED_MODEL": "@cf/baai/bge-base-en-v1.5",
-    // Max RAG chunks injected into the prompt
     "RAG_TOP_K": "8",
-    // Max open-corpus scripts the ingest tooling will accept
     "CORPUS_MAX_SCRIPTS": "1000",
-    // CORS allow-list (comma-separated). AXIS local default + HOOX.
     "ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081,https://axis.hoox.sh,https://hoox.sh,https://hoox.sh/axis,https://pynescript.ai,https://pynescript-axis.pages.dev",
-    // Optional evaluate host (only if you run pyne-worker / HOOX stack):
-    // "PYNE_WORKER_URL": "https://pyne-worker.example.workers.dev",
-    // When no pyne-worker is configured, validation is automatically skipped.
     "VALIDATE_DEFAULT": "true",
     "VALIDATE_MAX_RETRIES": "2"
+    // Optional AI Gateway id (observability / caching attribution):
+    // "AI_GATEWAY_ID": "pyne-agent-gateway"
   }
 
   // Secrets (set via `wrangler secret put`):
