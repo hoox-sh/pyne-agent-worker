@@ -30,6 +30,7 @@ You can deploy and use this agent with **only Cloudflare® Workers AI™** (plus
 |---------|------|-----------|
 | **pyne-agent-worker** (this) | Edge **write** scripts via chat + RAG (PYNE Agent) | — |
 | [hoox-sh/pyne](https://github.com/hoox-sh/pyne) | Pine toolchain + Pro API | Optional |
+| [hoox-sh/pynets](https://github.com/hoox-sh/pynets) | TypeScript library (`@hoox-sh/pynets`) — in-process evaluate | Optional |
 | [hoox-sh/pyne-worker](https://github.com/hoox-sh/pyne-worker) | Edge **evaluate** host | Optional (validate loop only) |
 | [hoox-sh/axis](https://github.com/hoox-sh/axis) | Charting PWA (plugins) | Optional UI |
 
@@ -152,8 +153,8 @@ See [`plugin/README.md`](./plugin/README.md) · [`docs/AXIS.md`](./docs/AXIS.md)
 
 Published AXIS docs (after site sync):
 
-- [PYNE Agent plugin](https://hoox.sh/axis/docs/plugins/pine-agent)
-- [End-user guide](https://hoox.sh/axis/docs/enduser/guides/pine-agent)
+- [PYNE Agent plugin](https://hoox.sh/axis/docs/plugins/pyne-agent)
+- [End-user guide](https://hoox.sh/axis/docs/enduser/guides/pyne-agent)
 - [PYNE agent overview](https://hoox.sh/pyne/docs/agent)
 
 ## API

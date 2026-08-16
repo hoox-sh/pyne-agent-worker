@@ -15,8 +15,8 @@ Module path in this repo: `plugin/axis-pine-agent.js` (also served from `public/
 
 | Site | Page |
 |------|------|
-| AXIS | [Plugins — PYNE Agent](https://hoox.sh/axis/docs/plugins/pine-agent) |
-| AXIS | [End-user guide](https://hoox.sh/axis/docs/enduser/guides/pine-agent) |
+| AXIS | [Plugins — PYNE Agent](https://hoox.sh/axis/docs/plugins/pyne-agent) |
+| AXIS | [End-user guide](https://hoox.sh/axis/docs/enduser/guides/pyne-agent) |
 | PYNE | [Agent overview](https://hoox.sh/pyne/docs/agent) |
 
 ## Config
