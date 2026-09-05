@@ -8,7 +8,7 @@
     "id": { "type": "string" },
     "kind": {
       "type": "string",
-      "enum": ["docs-v5", "docs-v6", "docs", "corpus", "builtin-ref", "template"]
+      "enum": ["docs-v5", "docs-v6", "docs", "docs-axis", "corpus", "builtin-ref", "template"]
     },
     "license": {
       "type": "string",

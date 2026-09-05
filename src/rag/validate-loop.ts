@@ -49,6 +49,8 @@ export type ValidateLoopOpts = {
   model?: string;
   /** When false, single generate only */
   validate?: boolean;
+  /** When false, a reply without a ```pine fence is not a validation failure (AXIS how-tos). */
+  requirePine?: boolean;
   /** Extra retries after first failure (default 2 → up to 3 generates) */
   maxRetries?: number;
   validateMode?: "interpret" | "compile" | "auto";
@@ -148,7 +150,7 @@ export async function generateValidateRetry(
         mode: opts.validateMode || "interpret",
       });
       lastValidation = validation;
-    } else if (wantValidate && !pine) {
+    } else if (wantValidate && !pine && opts.requirePine !== false) {
       validation = {
         ok: false,
         error: "model reply contained no ```pine block",

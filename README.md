@@ -4,7 +4,7 @@
 > backed by an optional private **Vectorize™** knowledge base. **AXIS** sister plugin.
 > (Targets the Pine Script™ language; not a TradingView® product.)
 
-**Version:** 0.1.2 · **Runtime:** Cloudflare Workers (TypeScript) · **License:** AGPL-3.0-or-later
+**Version:** 0.2.0 · **Runtime:** Cloudflare Workers (TypeScript) · **License:** AGPL-3.0-or-later
 
 _Pine Script™ and TradingView® are trademarks of TradingView, Inc.  
 Cloudflare® is a registered trademark of Cloudflare, Inc.  
@@ -120,17 +120,24 @@ Without either binding, responses include `validation.available: false` and a si
 ### Build the knowledge base (private)
 
 ```bash
-# 1) Docs you are allowed to use (offline export) + optional PYNE docs
-bun run ingest:docs -- --dir /secure/pine-docs-v6 --version v6
-bun run ingest:docs -- --pyne-docs ../pynescript/docs/pyne
+# 0) One-shot: pineDocs.json + AXIS PWA + PYNE packs / sister repos
+#    Drop knowledge/pineDocs.json, knowledge/axis-llm.txt, knowledge/pyne-llm.txt
+#    (all gitignored) or keep ../axis and ../pynescript checked out beside this repo.
+bun run ingest:kb
 
-# 2) Open corpus (max 1000) — not TV built-ins
+# Or stepwise:
+bun run ingest:pinedocs                         # knowledge/pineDocs.json → v6 language ref
+bun run ingest:axis                             # build knowledge/axisDocs.json from ../axis/docs
+bun run ingest:docs -- --pyne-docs ../pynescript/docs/pyne
+bun run ingest:llm                              # fallback: knowledge/axis-llm.txt + pyne-llm.txt
+
+# Open corpus (max 1000) — not TV built-ins
 bun run ingest:corpus -- --dir /secure/open-pine-corpus --max 1000
 
-# 3) Built-in *metadata* / private refs (never commit the inputs)
+# Built-in *metadata* / private refs (never commit the inputs)
 bun run ingest:builtins -- --metadata ../pynescript/src/pynescript/langserver/providers/builtin_metadata.json
 
-# 4) Embed + upsert (worker must be deployed with API_KEY)
+# Embed + upsert (worker must be deployed with API_KEY)
 bun run scripts/build-index.ts \
   --embed-endpoint https://pyne-agent-worker.<you>.workers.dev/v1/admin/embed
 ```

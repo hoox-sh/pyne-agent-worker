@@ -34,6 +34,17 @@ a = security(syminfo.tickerid, "D", close)
     expect(r.fixed).not.toMatch(/(?<!request\.)security\s*\(/);
   });
 
+  test("warns on v6-removed when= and transp=", () => {
+    const src = `//@version=6
+strategy("X")
+strategy.entry("L", strategy.long, when=true)
+plot(close, transp=50)
+`;
+    const r = lintPine(src);
+    expect(r.issues.some((i) => i.rule === "strategy-when")).toBe(true);
+    expect(r.issues.some((i) => i.rule === "deprecated-transp")).toBe(true);
+  });
+
   test("formatLintForModel returns text", () => {
     const r = lintPine("");
     expect(formatLintForModel(r)).toContain("validate_pine");

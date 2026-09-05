@@ -11,6 +11,7 @@ import {
   buildSystemPrompt,
   extractPineBlock,
   formatRagContext,
+  wantsPineScript,
 } from "../src/rag/prompts";
 
 describe("legal marks", () => {
@@ -58,5 +59,25 @@ describe("prompts", () => {
 
   test("formatRagContext empty", () => {
     expect(formatRagContext([])).toContain("Pine Script™");
+  });
+
+  test("system prompt forbids Example Workflow essays", () => {
+    const s = buildSystemPrompt({ pineVersion: "v6" });
+    expect(s).toContain("Mode B");
+    expect(s).toMatch(/Example Workflow/);
+    expect(s).toContain("DSM");
+  });
+});
+
+describe("wantsPineScript", () => {
+  test("AXIS how-to is not a script request", () => {
+    expect(
+      wantsPineScript("How do I backfill historical data in AXIS using the Data Source Manager?")
+    ).toBe(false);
+  });
+
+  test("script requests stay script requests", () => {
+    expect(wantsPineScript("v6 RSI strategy with ATR trailing stop")).toBe(true);
+    expect(wantsPineScript("write an ema crossover indicator")).toBe(true);
   });
 });

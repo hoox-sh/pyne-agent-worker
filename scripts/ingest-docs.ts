@@ -33,6 +33,7 @@ const OUT = join(ROOT, "knowledge", "data", "docs");
 type Args = {
   dir?: string;
   pyneDocs?: string;
+  pinedocs?: string;
   version: "v5" | "v6" | "mixed";
 };
 
@@ -42,6 +43,7 @@ function parseArgs(argv: string[]): Args {
     const a = argv[i];
     if (a === "--dir") out.dir = argv[++i];
     else if (a === "--pyne-docs") out.pyneDocs = argv[++i];
+    else if (a === "--pinedocs") out.pinedocs = argv[++i];
     else if (a === "--version") out.version = argv[++i] as Args["version"];
   }
   return out;
@@ -80,15 +82,28 @@ async function main() {
     });
   }
 
-  if (!sources.length) {
+  if (args.pinedocs) {
+    const { spawnSync } = await import("node:child_process");
+    const r = spawnSync(
+      "bun",
+      ["run", join(ROOT, "scripts", "ingest-pinedocs.ts"), "--file", args.pinedocs, "--version", args.version],
+      { stdio: "inherit" }
+    );
+    if (r.status !== 0) process.exit(r.status || 1);
+  }
+
+  if (!sources.length && !args.pinedocs) {
     console.error(
       "Usage: bun run scripts/ingest-docs.ts --dir <docs-export> [--version v5|v6|mixed]\n" +
-        "   or: bun run scripts/ingest-docs.ts --pyne-docs ../pynescript/docs/pyne\n\n" +
+        "   or: bun run scripts/ingest-docs.ts --pyne-docs ../pynescript/docs/pyne\n" +
+        "   or: bun run scripts/ingest-docs.ts --pinedocs ./knowledge/pineDocs.json\n\n" +
         "Does not scrape TradingView® by default. Place lawful offline exports in --dir.\n" +
         "Pine Script™ / TradingView® marks belong to TradingView, Inc."
     );
     process.exit(2);
   }
+
+  if (!sources.length) return;
 
   await mkdir(OUT, { recursive: true });
   const manifest: unknown[] = [];

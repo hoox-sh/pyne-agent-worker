@@ -33,6 +33,12 @@ knowledge/corpus/
 knowledge/builtins/
 knowledge/docs-cache/
 knowledge/index-export/
+# Operator language-reference + llm packs (not redistributable TV dumps; HOOX packs stay local)
+knowledge/pineDocs.json
+knowledge/axisDocs.json
+knowledge/pyneDocs.json
+knowledge/*-llm.txt
+knowledge/llm.txt
 *.pine.bak
 
 # Allow tiny open templates (non-TV, HOOX-owned examples only)

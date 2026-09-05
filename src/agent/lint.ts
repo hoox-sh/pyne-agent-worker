@@ -103,10 +103,15 @@ const BANNED: Array<{ re: RegExp; rule: string; message: string; fix?: (s: strin
     fix: (s) => s.replace(/\bstudy\s*\(/g, "indicator("),
   },
   {
-    re: /strategy\.entry\s*\([^)]*\bwhen\s*=/g,
-    rule: "strategy-entry-when",
+    re: /strategy\.(entry|order|exit|close|close_all|cancel|cancel_all)\s*\([^)]*\bwhen\s*=/g,
+    rule: "strategy-when",
     message:
-      "Avoid strategy.entry(..., when=...) style; wrap entries in if-conditions for v6 clarity.",
+      "v6 removed when= on strategy.* order calls; wrap the call in an if-condition.",
+  },
+  {
+    re: /\btransp\s*=/g,
+    rule: "deprecated-transp",
+    message: "transp= was removed in v6; use color.new(color, transparency).",
   },
   {
     re: /\bta\.(fake|magic|super_rsi|ultimate_buy|nonexistent)\b/gi,
@@ -158,7 +163,7 @@ export function lintPine(source: string): LintResult {
     const re = new RegExp(ban.re.source, ban.re.flags);
     while ((m = re.exec(fixed)) !== null) {
       issues.push({
-        severity: ban.rule === "strategy-entry-when" ? "warning" : "error",
+        severity: ban.rule === "strategy-when" || ban.rule === "deprecated-transp" ? "warning" : "error",
         rule: ban.rule,
         message: ban.message,
         line: lineOf(fixed, m.index),

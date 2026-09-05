@@ -23,8 +23,9 @@ export function buildSystemPrompt(opts?: {
     ``,
     `## Goals`,
     `- Produce correct, idiomatic ${MARKS.pine} (prefer v6 when version is auto; support v5 when asked).`,
-    `- Prefer PYNE/AXIS-friendly scripts (clear plots, inputs, no proprietary TV-only APIs when avoidable).`,
-    `- Explain briefly, then deliver a complete script in a fenced \`\`\`pine code block.`,
+    `- Prefer PYNE/AXIS-friendly scripts (clear plots, inputs, enums, force_overlay, no proprietary TV-only APIs when avoidable).`,
+    `- Default v6: no when=, no transp=, bool never na, request.security (not security), dynamic requests ok.`,
+    `- When writing a script, explain briefly, then deliver one complete fenced \`\`\`pine block.`,
     `- When the user asks to edit, return the full updated script (not a partial patch) unless they request a diff.`,
     ``,
     `## Constraints`,
@@ -36,9 +37,21 @@ export function buildSystemPrompt(opts?: {
     `- Prefer code that parses and evaluates cleanly on PYNE/AXIS. (Optional: operator may validate via pyne-worker; not required.)`,
     ``,
     `## Output format`,
-    `1. Short plan (1–4 bullets).`,
-    `2. One complete \`\`\`pine block with //@version=5 or //@version=6.`,
-    `3. Optional notes: inputs, known limitations, how to run on AXIS / PYNE.`,
+    `Pick **one** mode. Do not mix an AXIS tutorial with a filler script.`,
+    ``,
+    `### Mode A — write / edit a script`,
+    `1. 1–4 short bullets (what you will build).`,
+    `2. Exactly one complete \`\`\`pine fence with //@version=5 or //@version=6.`,
+    `3. Optional one-line notes (inputs, overlay, Run in AXIS).`,
+    `No "Example Workflow", no recap paragraph.`,
+    ``,
+    `### Mode B — AXIS / PYNE product how-to (no script asked)`,
+    `Plain lead line (never write the words "Lead sentence"). Then 3–7 numbered steps.`,
+    `Each step is one action: **button/field** + verb. Do not use chrome names as the step title.`,
+    `Stop after the last step. No "Example Workflow", no "Notes:", no recap.`,
+    `Live AXIS topbar uses **DSM** for Data Source Manager (docs may still say Data). Prefer **DSM**.`,
+    `Other real labels: **Load**, **Start background backfill**, **Load to chart**, command palette **Toggle Data Source Manager**.`,
+    `Do **not** emit a \`\`\`pine block in this mode.`,
   ].join("\n");
 }
 
@@ -75,6 +88,23 @@ export function buildUserAugmentedMessage(
     "## User request",
     userText,
   ].join("\n");
+}
+
+/** True when the user is asking for a Pine Script™, not an AXIS/product how-to. */
+export function wantsPineScript(userText: string): boolean {
+  const t = String(userText || "").toLowerCase();
+  if (!t.trim()) return false;
+  const howTo =
+    /\b(how (do i|to|can i)|where (is|do i)|which button|open the|toggle the|install (the )?plugin|backfill|data source manager|workers manager|command palette)\b/.test(
+      t
+    );
+  const scriptIntent =
+    /\b(write|create|generate|build|implement|code|indicator|strategy|library|plot|pine|script)\b/.test(
+      t
+    );
+  if (howTo && !scriptIntent) return false;
+  if (scriptIntent) return true;
+  return !howTo;
 }
 
 /** Extract first fenced pine / pinescript / code block if present. */

@@ -32,6 +32,30 @@
       "origin": "API signatures / metadata — not full TV built-in .pine sources",
       "redistributable": false,
       "notes": "Never commit TradingView® built-in sources to git."
+    },
+    {
+      "id": "pinedocs-v6-operator",
+      "kind": "docs-v6",
+      "license": "operator-private",
+      "origin": "knowledge/pineDocs.json — operator language reference (v6 through August 2026)",
+      "redistributable": false,
+      "notes": "Gitignored. bun run ingest:pinedocs"
+    },
+    {
+      "id": "axis-pwa-docs",
+      "kind": "docs-axis",
+      "license": "AGPL-3.0-only",
+      "origin": "Sister AXIS PWA docs (../axis/docs) or knowledge/axis-llm.txt",
+      "redistributable": true,
+      "notes": "HOOX first-party. bun run ingest:axis && bun run ingest:kb"
+    },
+    {
+      "id": "pyne-docs-pack",
+      "kind": "docs",
+      "license": "AGPL-3.0-or-later",
+      "origin": "Sister PYNE docs (../pynescript/docs/pyne) or knowledge/pyne-llm.txt",
+      "redistributable": true,
+      "notes": "HOOX first-party. bun run ingest:llm -- --file knowledge/pyne-llm.txt --product pyne"
     }
   ]
 }

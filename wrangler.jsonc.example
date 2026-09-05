@@ -36,7 +36,7 @@
 
   "vars": {
     "SERVICE_NAME": "pyne-agent-worker",
-    "SERVICE_VERSION": "0.1.2",
+    "SERVICE_VERSION": "0.2.0",
     "CHAT_MODEL": "@cf/qwen/qwen2.5-coder-32b-instruct",
     "EMBED_MODEL": "@cf/baai/bge-base-en-v1.5",
     "RAG_TOP_K": "8",

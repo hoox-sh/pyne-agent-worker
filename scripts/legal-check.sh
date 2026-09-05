@@ -23,6 +23,16 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   fi
 fi
 
+# Language-reference dumps and llm packs must stay untracked.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  tracked_kb="$(git ls-files 'knowledge/pineDocs.json' 'knowledge/axisDocs.json' 'knowledge/pyneDocs.json' 'knowledge/*-llm.txt' 'knowledge/llm.txt' 2>/dev/null || true)"
+  if [[ -n "${tracked_kb}" ]]; then
+    echo "ERROR: knowledge dumps must not be tracked (ingest to R2/Vectorize only):"
+    echo "${tracked_kb}"
+    fail=1
+  fi
+fi
+
 # Working tree dumps under knowledge/ must stay untracked / gitignored.
 for d in knowledge/data knowledge/raw knowledge/corpus knowledge/builtins knowledge/docs-cache; do
   if [[ -d "$d" ]] && find "$d" -type f ! -name '.gitkeep' 2>/dev/null | grep -q .; then

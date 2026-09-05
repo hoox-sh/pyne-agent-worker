@@ -8,6 +8,7 @@ import { isValidateAvailable } from "../lib/pyne-worker";
 import {
   buildSystemPrompt,
   buildUserAugmentedMessage,
+  wantsPineScript,
 } from "../rag/prompts";
 import { retrieve } from "../rag/retrieve";
 import {
@@ -125,6 +126,7 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       validate,
       maxRetries,
       validateMode: body.validate_mode || "interpret",
+      requirePine: wantsPineScript(userText),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
