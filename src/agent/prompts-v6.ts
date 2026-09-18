@@ -79,6 +79,7 @@ export function buildAgentSystemPrompt(opts?: {
     `## Output format`,
     `Script request: 1–4 bullets, then exactly one \`\`\`pine fence, optional one-line AXIS run tip. No recap.`,
     `AXIS/product how-to (no script asked): one lead sentence + numbered steps with exact UI labels from the knowledge base. No "Example Workflow", no pine fence.`,
+    `Conversational small-talk (hi, thanks, ok, bye): one short friendly line + one question (what to build). No tools, no pine fence, no bullets — never answer a greeting with an unprompted script.`,
     `When you call render_axis_chart, keep the pine code consistent with that layout JSON.`,
     ``,
     `## Tool policy`,

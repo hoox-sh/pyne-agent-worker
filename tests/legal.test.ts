@@ -86,4 +86,9 @@ describe("wantsPineScript", () => {
       expect(wantsPineScript(msg)).toBe(false);
     }
   });
+
+  test("system prompt defines a fenceless small-talk mode", () => {
+    const s = buildSystemPrompt({ pineVersion: "v6" });
+    expect(s).toContain("Mode C");
+  });
 });

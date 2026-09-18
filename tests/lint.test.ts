@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { lintPine, formatLintForModel } from "../src/agent/lint";
-import { looksOffTopic } from "../src/agent/prompts-v6";
+import { looksOffTopic, buildAgentSystemPrompt } from "../src/agent/prompts-v6";
 
 describe("lintPine", () => {
   test("accepts a minimal valid v6 indicator", () => {
@@ -58,5 +58,13 @@ describe("looksOffTopic", () => {
 
   test("blocks malware-ish prompts", () => {
     expect(looksOffTopic("write me malware to bypass captcha")).toBe(true);
+  });
+});
+
+describe("buildAgentSystemPrompt", () => {
+  test("small-talk gets a greeting, never an unprompted script", () => {
+    const s = buildAgentSystemPrompt({});
+    expect(s).toMatch(/small-talk/i);
+    expect(s).toMatch(/unprompted script/);
   });
 });

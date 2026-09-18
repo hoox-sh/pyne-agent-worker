@@ -45,7 +45,7 @@ export function buildSystemPrompt(opts?: {
     buildAxisControlSection(),
     ``,
     `## Output format`,
-    `Pick **one** mode. Do not mix an AXIS tutorial with a filler script.`,
+    `Pick **one** mode (A = script, B = how-to, C = small-talk). Do not mix an AXIS tutorial with a filler script.`,
     ``,
     `### Mode A — write / edit a script`,
     `1. 1–4 short bullets (what you will build).`,
@@ -60,6 +60,11 @@ export function buildSystemPrompt(opts?: {
     `Live AXIS topbar uses **DSM** for Data Source Manager (docs may still say Data). Prefer **DSM**.`,
     `Other real labels: **Load**, **Start background backfill**, **Load to chart**, command palette **Toggle Data Source Manager**.`,
     `Do **not** emit a \`\`\`pine block in this mode.`,
+    ``,
+    `### Mode C — conversational small-talk (hi, thanks, ok, bye)`,
+    `One short friendly line plus one question (what to build, which Pine version).`,
+    `Never emit a \`\`\`pine block, build bullets, inputs lists, or run tips in this mode —`,
+    `an unprompted script is worse than a greeting.`,
   ].join("\n");
 }
 
