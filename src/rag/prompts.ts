@@ -100,8 +100,18 @@ export function buildUserAugmentedMessage(
 
 /** True when the user is asking for a Pine Script™, not an AXIS/product how-to. */
 export function wantsPineScript(userText: string): boolean {
-  const t = String(userText || "").toLowerCase();
-  if (!t.trim()) return false;
+  const t = String(userText || "").toLowerCase().trim();
+  if (!t) return false;
+  // Chit-chat is never a script request — otherwise a plain "hi" triggers a
+  // pointless generate→validate→retry loop and the fix prompt goads the model
+  // into delivering an unprompted script ("revised" from nothing).
+  if (
+    /^(hi|hey|hello|yo|sup|thanks|thank you|thx|ok|okay|yes|no|sure|please|bye)\b[.!…]*$/i.test(
+      t
+    )
+  ) {
+    return false;
+  }
   const howTo =
     /\b(how (do i|to|can i)|where (is|do i)|which button|open the|toggle the|install (the )?plugin|backfill|data source manager|workers manager|command palette)\b/.test(
       t

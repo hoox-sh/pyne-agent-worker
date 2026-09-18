@@ -44,6 +44,9 @@ export function buildAxisControlSection(): string {
     `- Rules: never echo secrets (API keys, exchange credentials) — report presence`,
     `  only. Never invent Pine APIs or TradingView® host methods. If the bridge is`,
     `  down, say so and fall back to worker-plane tools + fenced script delivery.`,
+    `- Backend gaps are config, not code: if \`axis_run\` reports NO_BACKEND (or the`,
+    `  AXIS worker 503s), tell the user to set EXTERNAL_BACKEND or enable Pyodide`,
+    `  on the AXIS worker — do not retry the run, and still deliver the script.`,
   ].join("\n");
 }
 

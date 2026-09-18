@@ -80,4 +80,10 @@ describe("wantsPineScript", () => {
     expect(wantsPineScript("v6 RSI strategy with ATR trailing stop")).toBe(true);
     expect(wantsPineScript("write an ema crossover indicator")).toBe(true);
   });
+
+  test("chit-chat is never a script request", () => {
+    for (const msg of ["hi", "hello", "hey", "thanks!", "ok", "bye"]) {
+      expect(wantsPineScript(msg)).toBe(false);
+    }
+  });
 });

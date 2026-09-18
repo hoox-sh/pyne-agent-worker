@@ -105,7 +105,20 @@ function appendValidationNote(
   validation: ValidateResult | null,
   attempts: number
 ): string {
-  if (!validation || validation.skipped) return text;
+  if (!validation) return text;
+  // Quiet skip when no backend is configured at all (normal standalone).
+  // But a *misconfigured* backend (present yet incapable) must surface once,
+  // or the operator never learns why nothing validates.
+  if (validation.skipped) {
+    if (
+      validation.reason &&
+      /NO_BACKEND|no evaluation backend/i.test(validation.reason) &&
+      !text.includes("NO_BACKEND")
+    ) {
+      return `${text.trim()}\n\n_Note: ${validation.reason}_`;
+    }
+    return text;
+  }
   const backend = backendLabel(validation);
   const status = validation.ok
     ? `validated OK on ${backend} after ${attempts} attempt(s)`

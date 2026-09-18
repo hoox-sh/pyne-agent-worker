@@ -260,6 +260,78 @@ describe("validate via AXIS", () => {
     }
   });
 
+  test("NO_BACKEND short-circuits to skipped with the fix", async () => {
+    const restore = mockFetch(() =>
+      rpcOk({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              ok: false,
+              status: 503,
+              body: { status: "error", code: "NO_BACKEND", message: "no backend" },
+            }),
+          },
+        ],
+        structuredContent: {
+          ok: false,
+          status: 503,
+          body: { status: "error", code: "NO_BACKEND", message: "no backend" },
+        },
+      })
+    );
+    try {
+      const r = await validateOnAxisMcp(ENV, { script: "indicator('x')" });
+      expect(r.ok).toBe(false);
+      expect(r.skipped).toBe(true);
+      expect(r.backend).toBe("axis-mcp");
+      expect(r.reason).toMatch(/NO_BACKEND/);
+    } finally {
+      restore();
+    }
+  });
+
+  test("retry loop stops after one attempt on NO_BACKEND and notes it", async () => {
+    let calls = 0;
+    const restore = mockFetch(() => {
+      calls += 1;
+      return rpcOk({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              ok: false,
+              status: 503,
+              body: { status: "error", code: "NO_BACKEND", message: "no backend" },
+            }),
+          },
+        ],
+        structuredContent: {
+          ok: false,
+          status: 503,
+          body: { status: "error", code: "NO_BACKEND", message: "no backend" },
+        },
+      });
+    });
+    try {
+      const out = await generateValidateRetry({
+        env: ENV,
+        messages: [{ role: "user", content: "rsi strategy" }],
+        chatFn: async () => ({
+          text: "Here:\n```pine\n//@version=6\nindicator('RSI')\nplot(ta.rsi(close, 14))\n```",
+          model: "test",
+          latencyMs: 1,
+        }),
+      });
+      expect(out.validated).toBe(false);
+      expect(out.retries).toBe(0);
+      expect(calls).toBe(1);
+      expect(out.text).toMatch(/NO_BACKEND/);
+    } finally {
+      restore();
+    }
+  });
+
   test("retry loop uses AXIS backend when pyne-worker absent", async () => {
     const restore = mockFetch(() =>
       rpcOk({

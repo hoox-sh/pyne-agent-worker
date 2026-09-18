@@ -323,7 +323,22 @@ export async function validateOnAxisMcp(
   }
   // axis_run surfaces engine errors as result text / structured error fields.
   const structured = asRecord(res.structured);
+  const body = asRecord(structured.body);
   const text = res.text || "";
+  // The AXIS worker itself has no evaluation backend (no EXTERNAL_BACKEND,
+  // no Pyodide) — retrying is pointless. Surface as skipped with the fix so
+  // the loop stops after one attempt instead of burning retries + GPU.
+  if (body.code === "NO_BACKEND" || text.includes("NO_BACKEND")) {
+    return {
+      ok: false,
+      skipped: true,
+      backend: "axis-mcp",
+      reason:
+        "AXIS worker has no evaluation backend (NO_BACKEND): set EXTERNAL_BACKEND=<pyne-url> " +
+        "or enable PYODIDE_IN_WORKER on the AXIS worker. Scripts are still returned unvalidated.",
+      latency_ms: latency(),
+    };
+  }
   const errText =
     (typeof structured.error === "string" && structured.error) ||
     (/error/i.test(text) ? text.slice(0, 800) : "");
