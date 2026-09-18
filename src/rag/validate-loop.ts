@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * generate → (optional) pyne-worker validate → retry loop for Pine Script™ chat.
+ * generate → (optional) validate → retry loop for Pine Script™ chat.
  *
- * Without pyne-worker configured this is a single generate pass (standalone mode).
- * With pyne-worker: draft → POST /run → fix retries.
+ * Validation backends, in preference order:
+ * 1. pyne-worker (`PYNE_SERVICE` / `PYNE_WORKER_URL`) — dedicated evaluator
+ * 2. AXIS MCP (`AXIS_MCP_URL` → `axis_run`) — runs on the AXIS Worker
+ * Without either, this is a single generate pass (standalone mode).
  */
 
 import {
@@ -19,6 +21,7 @@ import {
   validateOnPyneWorker,
   type ValidateResult,
 } from "../lib/pyne-worker";
+import { isAxisMcpConfigured, validateOnAxisMcp } from "../axis/mcp-client";
 import { extractPineBlock } from "./prompts";
 
 export type AttemptRecord = {
@@ -70,16 +73,21 @@ export type ValidateLoopResult = {
   retries: number;
 };
 
+function backendLabel(v: ValidateResult | null): string {
+  return v?.backend || "pyne-worker";
+}
+
 function buildFixUserMessage(
   previousPine: string,
   validation: ValidateResult
 ): string {
+  const backend = backendLabel(validation);
   const err = formatValidateError(validation);
   return [
-    "The previous Pine Script™ failed validation on the PYNE edge host (pyne-worker).",
+    `The previous Pine Script™ failed validation on ${backend}.`,
     "Fix the script so it parses and runs. Keep the same intent.",
     "",
-    "## pyne-worker error",
+    `## ${backend} error`,
     err,
     "",
     "## Previous script",
@@ -98,11 +106,24 @@ function appendValidationNote(
   attempts: number
 ): string {
   if (!validation || validation.skipped) return text;
+  const backend = backendLabel(validation);
   const status = validation.ok
-    ? `validated OK on pyne-worker after ${attempts} attempt(s)`
-    : `still failing pyne-worker after ${attempts} attempt(s): ${formatValidateError(validation)}`;
-  if (text.includes("pyne-worker")) return text;
+    ? `validated OK on ${backend} after ${attempts} attempt(s)`
+    : `still failing ${backend} after ${attempts} attempt(s): ${formatValidateError(validation)}`;
+  if (text.includes(backend)) return text;
   return `${text.trim()}\n\n_Validation: ${status}._`;
+}
+
+/** True when any validation backend (pyne-worker or AXIS MCP) is available. */
+export function isAnyValidateAvailable(env: Env): boolean {
+  return isValidateAvailable(env) || isAxisMcpConfigured(env);
+}
+
+/** Default validator: pyne-worker first, AXIS MCP second, skip-record last. */
+function defaultValidateFn(env: Env): ValidateFn {
+  if (isValidateAvailable(env)) return validateOnPyneWorker;
+  if (isAxisMcpConfigured(env)) return validateOnAxisMcp;
+  return validateOnPyneWorker; // returns skipped when unconfigured
 }
 
 /**
@@ -116,12 +137,12 @@ export async function generateValidateRetry(
     Math.min(opts.maxRetries ?? 2, 5)
   );
   const chatFn = opts.chatFn || chatComplete;
-  const validateFn = opts.validateFn || validateOnPyneWorker;
+  const validateFn = opts.validateFn || defaultValidateFn(opts.env);
   const wantValidate =
     opts.validate !== false &&
     (opts.validateFn
       ? true
-      : isValidateAvailable(opts.env));
+      : isAnyValidateAvailable(opts.env));
 
   const messages: ChatMessage[] = [...opts.messages];
   const attempts: AttemptRecord[] = [];

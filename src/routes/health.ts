@@ -5,6 +5,8 @@ import { json } from "../lib/json";
 import { DISCLAIMER_SHORT, MARKS } from "../lib/legal";
 import { chatModel, embedModel } from "../ai/models";
 import { isValidateAvailable } from "../lib/pyne-worker";
+import { isAxisMcpConfigured } from "../axis/mcp-client";
+import { isAnyValidateAvailable } from "../rag/validate-loop";
 
 /**
  * Health for standalone + HOOX modes.
@@ -26,6 +28,7 @@ export async function handleHealth(env: Env): Promise<Response> {
         ? "service_binding"
         : "http"
       : "optional_not_configured",
+    axis_mcp: isAxisMcpConfigured(env) ? "configured" : "optional_not_configured",
   };
 
   // Lightweight D1 ping (non-fatal)
@@ -38,7 +41,11 @@ export async function handleHealth(env: Env): Promise<Response> {
     }
   }
 
-  const mode = isValidateAvailable(env) ? "hoox" : "standalone";
+  const mode = isValidateAvailable(env)
+    ? "hoox"
+    : isAxisMcpConfigured(env)
+      ? "axis"
+      : "standalone";
   // Standalone: AI is enough. RAG/sessions degrade gracefully.
   const healthy = checks.ai === "ok";
 
@@ -62,14 +69,17 @@ export async function handleHealth(env: Env): Promise<Response> {
         ai_gateway: (env.AI_GATEWAY_ID || "").trim() || null,
       },
       validation: {
-        // Requested by default, but auto-skipped when pyne-worker is absent.
+        // Requested by default, but auto-skipped when no backend is present.
         default: (env.VALIDATE_DEFAULT || "true").toLowerCase() !== "false",
         max_retries: Number(env.VALIDATE_MAX_RETRIES || "2"),
-        available: isValidateAvailable(env),
+        available: isAnyValidateAvailable(env),
         pyne_worker: checks.pyne_worker,
+        axis_mcp: checks.axis_mcp,
         note: isValidateAvailable(env)
           ? "generate → pyne-worker validate → retry enabled"
-          : "standalone: pyne-worker not configured; chat works without validate loop",
+          : isAxisMcpConfigured(env)
+            ? "generate → AXIS MCP axis_run validate → retry enabled"
+            : "standalone: no validation backend configured; chat works without validate loop",
       },
       marks: {
         pine: MARKS.pine,

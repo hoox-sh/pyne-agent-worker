@@ -103,7 +103,7 @@
 
   "vars": {
     "SERVICE_NAME": "pyne-agent-worker",
-    "SERVICE_VERSION": "0.2.0",
+    "SERVICE_VERSION": "0.3.0",
     "CHAT_MODEL": "@cf/qwen/qwen2.5-coder-32b-instruct",
     // Faster/smaller fallback when primary times out
     "CHAT_MODEL_FALLBACK": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
@@ -112,12 +112,16 @@
     "CORPUS_MAX_SCRIPTS": "1000",
     "ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081,https://axis.hoox.sh,https://hoox.sh,https://hoox.sh/axis,https://pynescript.ai,https://pynescript-axis.pages.dev",
     "VALIDATE_DEFAULT": "true",
-    "VALIDATE_MAX_RETRIES": "2"
+    "VALIDATE_MAX_RETRIES": "2",
+    // AXIS MCP endpoint for deep app control (run, chart, editor, results…).
+    // Production default; point at local AXIS Worker when developing.
+    "AXIS_MCP_URL": "https://worker.axis.hoox.sh/mcp"
     // Optional AI Gateway id (observability / caching attribution):
     // "AI_GATEWAY_ID": "pyne-agent-gateway"
   }
 
   // Secrets (set via `wrangler secret put`):
   //   API_KEY — shared secret for HTTP auth (X-API-Key / Authorization: Bearer)
+  //   AXIS_MCP_KEY — Bearer for the AXIS MCP endpoint (falls back to API_KEY)
   //   PYNE_WORKER_API_KEY — optional; only for HTTP pyne-worker validate loop
 }

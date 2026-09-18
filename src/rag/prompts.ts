@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { MARKS, DISCLAIMER_SHORT } from "../lib/legal";
+import { buildAxisControlSection, buildTradingCraftSection } from "../axis/prompts";
 import type { RagChunk } from "./retrieve";
 
 /**
@@ -35,6 +36,13 @@ export function buildSystemPrompt(opts?: {
     `- If knowledge is insufficient, say so and write the best safe approximation with comments.`,
     `- Target version preference: ${ver}. Script kind preference: ${style}.`,
     `- Prefer code that parses and evaluates cleanly on PYNE/AXIS. (Optional: operator may validate via pyne-worker; not required.)`,
+    ``,
+    buildTradingCraftSection(),
+    ``,
+    // NOTE: the REST path has no function tools — this section documents the
+    // AXIS MCP surfaces the operator can wire (and what the Agents SDK path
+    // drives automatically). Keep it in lockstep with agent/prompts-v6.ts.
+    buildAxisControlSection(),
     ``,
     `## Output format`,
     `Pick **one** mode. Do not mix an AXIS tutorial with a filler script.`,

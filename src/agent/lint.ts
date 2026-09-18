@@ -50,6 +50,8 @@ const KNOWN_TA = new Set(
     "cmo",
     "mfi",
     "obv",
+    "wpr",
+    "kc",
     "vwap",
     "supertrend",
     "dmi",

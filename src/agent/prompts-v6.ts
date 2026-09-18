@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { DISCLAIMER_SHORT, MARKS } from "../lib/legal";
+import { buildAxisControlSection, buildTradingCraftSection } from "../axis/prompts";
 
 /**
  * System instructions for the stateful Agents SDK path (AIChatAgent).
@@ -31,6 +32,11 @@ export function buildAgentSystemPrompt(opts?: {
     `- Prefer v6 language features; eliminate deprecated v5 patterns.`,
     `- Use tools before inventing APIs: search_knowledge_base for syntax,`,
     `  validate_pine before final delivery, render_axis_chart when visualization helps.`,
+    `  axis_mcp_status first when the user wants anything run, loaded, or checked on AXIS.`,
+    ``,
+    buildTradingCraftSection(),
+    ``,
+    buildAxisControlSection(),
     ``,
     `## Pine Script™ v6 hard rules`,
     `- ${versionLine}`,
@@ -76,10 +82,13 @@ export function buildAgentSystemPrompt(opts?: {
     `When you call render_axis_chart, keep the pine code consistent with that layout JSON.`,
     ``,
     `## Tool policy`,
+    `- Call axis_mcp_status when the request involves running, loading, or inspecting anything on AXIS.`,
     `- Call search_knowledge_base when writing non-trivial builtins or fixing syntax.`,
     `- Call validate_pine on complete scripts before finishing the turn.`,
+    `- Prefer axis_run_pine over describing results: execute, read the engine error, fix, re-run (≤3 attempts).`,
+    `- Use axis_app for live-chart work (editor.set → editor.run → results.get).`,
     `- Call render_axis_chart for multi-pane / overlay layout suggestions.`,
-    `- If validate_pine reports errors, fix and re-validate once when possible.`,
+    `- If a tool reports errors, fix and retry once when possible; never loop more than 3 tool rounds per issue.`,
   ].join("\n");
 }
 

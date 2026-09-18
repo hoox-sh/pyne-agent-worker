@@ -31,3 +31,16 @@ Module path in this repo: `plugin/axis-pine-agent.js` (also served from `public/
 ## Standalone
 
 AXIS + this worker alone is enough. pyne-worker is optional (validate loop only).
+
+## Deep control (agent → AXIS MCP)
+
+Set `AXIS_MCP_URL` (+ `AXIS_MCP_KEY` secret) and the agent drives AXIS:
+
+| Layer | Tools | Needs |
+|-------|-------|-------|
+| Validate | `axis_run` via `axis_run_pine` / validate loop | MCP configured |
+| Worker plane | `axis_control` → scripts, market, on-chain, health, usage | MCP configured |
+| App plane | `axis_app` → editor, chart, indicators, alerts, results, workspace, … | Bridged PWA tab (`bridge_connected > 0`) |
+
+`axis_mcp_status` reports all three layers. The same surface is exposed on
+`/mcp` (`axis_mcp_*`, `axis_run_pine`, `axis_app_invoke`) for external IDEs.

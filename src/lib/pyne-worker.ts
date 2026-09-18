@@ -16,6 +16,8 @@ import { syntheticBars } from "./synthetic-bars";
 export type ValidateResult = {
   ok: boolean;
   skipped?: boolean;
+  /** Which backend produced this result (`pyne-worker` | `axis-mcp`). */
+  backend?: string;
   reason?: string;
   status?: number;
   error?: string;
@@ -95,6 +97,7 @@ export async function validateOnPyneWorker(
     return {
       ok: false,
       skipped: true,
+      backend: "pyne-worker",
       reason: "pyne-worker not configured (set PYNE_SERVICE or PYNE_WORKER_URL)",
       latency_ms: Date.now() - started,
     };
@@ -104,6 +107,7 @@ export async function validateOnPyneWorker(
   if (!script) {
     return {
       ok: false,
+      backend: "pyne-worker",
       error: "empty script",
       latency_ms: Date.now() - started,
     };
@@ -125,6 +129,7 @@ export async function validateOnPyneWorker(
     if (status >= 200 && status < 300 && !data.error) {
       return {
         ok: true,
+        backend: "pyne-worker",
         status,
         mode: data.mode != null ? String(data.mode) : mode,
         bars: typeof data.bars === "number" ? data.bars : ohlcv.length,
@@ -139,6 +144,7 @@ export async function validateOnPyneWorker(
 
     return {
       ok: false,
+      backend: "pyne-worker",
       status,
       error: String(data.error || `pyne-worker HTTP ${status}`),
       error_kind: data.error_kind != null ? String(data.error_kind) : undefined,
@@ -156,6 +162,7 @@ export async function validateOnPyneWorker(
   } catch (e) {
     return {
       ok: false,
+      backend: "pyne-worker",
       error: e instanceof Error ? e.message : String(e),
       latency_ms: Date.now() - started,
     };

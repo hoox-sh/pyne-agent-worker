@@ -39,6 +39,9 @@ bun run dev
 | HTTP router | `src/index.ts` |
 | Chat + RAG prompt | `src/routes/chat.ts`, `src/rag/*` |
 | Validate loop | `src/rag/validate-loop.ts`, `src/lib/pyne-worker.ts` |
+| AXIS MCP client + control | `src/axis/mcp-client.ts`, `src/axis/prompts.ts` |
+| Agent tools / prompts | `src/agent/tools.ts`, `src/agent/prompts-v6.ts` |
+| MCP server | `src/mcp/pyne-mcp.ts` |
 | Legal strings | `src/lib/legal.ts` |
 | AXIS plugin | `plugin/axis-pine-agent.js` |
 | Ingest | `scripts/ingest-*.ts`, `scripts/build-index.ts` |
@@ -51,7 +54,8 @@ Users who do not run the HOOX stack still get full NL → PYNE Agent chat (AI + 
 ## Validate loop (optional)
 
 When `PYNE_SERVICE` or `PYNE_WORKER_URL` is set: **generate → pyne-worker `/run` → retry**.  
-When not set: single generate; `validation.available: false` / skipped. Never fail chat because pyne-worker is absent.
+When only `AXIS_MCP_URL` is set: **generate → AXIS `axis_run` → retry** (`mode: "axis"`).  
+When neither is set: single generate; `validation.available: false` / skipped. Never fail chat because a backend is absent.
 
 ## Related repos
 

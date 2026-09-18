@@ -52,6 +52,10 @@ interface Env {
   AI_GATEWAY_ID?: string;
   /** HTTPS origin of pyne-worker when service binding is unavailable. */
   PYNE_WORKER_URL?: string;
+  /** AXIS MCP endpoint for deep app control, e.g. https://worker.axis.hoox.sh/mcp */
+  AXIS_MCP_URL?: string;
+  /** Bearer for the AXIS MCP endpoint (falls back to API_KEY). Set via secret. */
+  AXIS_MCP_KEY?: string;
   /** Default true — run generate→validate→retry when pyne-worker is configured. */
   VALIDATE_DEFAULT?: string;
   /** Extra fix attempts after first validation failure (default 2). */

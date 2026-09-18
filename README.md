@@ -117,6 +117,34 @@ echo "pyne-api-key" | npx wrangler secret put PYNE_WORKER_API_KEY
 
 Without either binding, responses include `validation.available: false` and a single generate pass.
 
+### Optional: deep AXIS control (MCP)
+
+Point the worker at an AXIS MCP endpoint and the agent can **run scripts,
+drive the chart/editor, and read results** — not just write code:
+
+```bash
+# Bearer for the AXIS Worker (falls back to API_KEY when empty)
+echo "pn_…" | npx wrangler secret put AXIS_MCP_KEY
+```
+
+```jsonc
+// wrangler.jsonc — vars (production default already set)
+{ "AXIS_MCP_URL": "https://worker.axis.hoox.sh/mcp" }
+```
+
+What unlocks, in order:
+1. **Validate loop without pyne-worker** — `axis_run` becomes the second
+   validation backend (`mode: "axis"` on `/v1/chat` and `/health`).
+2. **Agent tools** (`/agents/pyne-agent/:session`): `axis_mcp_status`,
+   `axis_mcp_tools`, `axis_control`, `axis_run_pine`, `axis_app`.
+3. **Live-chart control** once a PWA tab is bridged (AXIS → Settings → MCP):
+   `editor.set/run`, `chart.load`, `results.get`, `alerts.*`, `workspace.*`, …
+4. **Same surface on `/mcp`** for external IDEs: `axis_mcp_*`, `axis_run_pine`,
+   `axis_app_invoke` alongside `search_knowledge_base` / `validate_pine`.
+
+Worker-plane tools work with no PWA open; app-plane tools need
+`bridge_connected > 0` (check `axis_mcp_status`). Secrets are never echoed.
+
 ### Build the knowledge base (private)
 
 ```bash
@@ -229,6 +257,8 @@ generate (Workers AI™)
 | `PYNE_WORKER_API_KEY` | **Optional** secret for HTTP pyne-worker |
 | `VALIDATE_DEFAULT` | Prefer validate when available (`true` / `false`) |
 | `VALIDATE_MAX_RETRIES` | Extra fix attempts (default `2`) |
+| `AXIS_MCP_URL` | AXIS MCP endpoint for deep app control (default `https://worker.axis.hoox.sh/mcp`) |
+| `AXIS_MCP_KEY` | **Optional** secret (Bearer) for the AXIS MCP endpoint |
 
 Standalone deploy: leave `PYNE_*` unset. Do not add a `services` binding to a worker you do not run.
 

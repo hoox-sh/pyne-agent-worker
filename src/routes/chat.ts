@@ -17,7 +17,8 @@ import {
   getSession,
   listMessages,
 } from "../rag/sessions";
-import { generateValidateRetry } from "../rag/validate-loop";
+import { generateValidateRetry, isAnyValidateAvailable } from "../rag/validate-loop";
+import { isAxisMcpConfigured } from "../axis/mcp-client";
 
 export type ChatBody = {
   /** Natural language request */
@@ -149,11 +150,13 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     }
   }
 
-  const validateAvailable = isValidateAvailable(env);
+  const validateAvailable = isAnyValidateAvailable(env);
+  const axisWired = isAxisMcpConfigured(env);
 
   return json({
     ok: true,
-    mode: validateAvailable ? "hoox" : "standalone",
+    mode: isValidateAvailable(env) ? "hoox" : axisWired ? "axis" : "standalone",
+    axis_mcp: axisWired,
     session_id: sessionId || null,
     reply: loopResult.text,
     pine: loopResult.pine,

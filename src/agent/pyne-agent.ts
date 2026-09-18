@@ -101,8 +101,8 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
         system,
         messages: await convertToModelMessages(this.messages),
         tools,
-        // Allow tool → model → tool loop for search + validate
-        stopWhen: stepCountIs(6),
+        // Allow tool → model → tool loops: search + lint + AXIS run/fix cycles
+        stopWhen: stepCountIs(8),
         abortSignal: options?.abortSignal,
         onFinish: async (event) => {
           // Attach model id for observability (Workers logs)
