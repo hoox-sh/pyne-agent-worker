@@ -221,22 +221,26 @@ Published AXIS docs (after site sync):
 }
 ```
 
-Response includes `reply`, extracted `pine` source, `validation` (attempts / pyne-worker errors), `rag` hit list, and trademark disclaimer.
+Response includes `reply`, extracted `pine` source, `validation` (attempts / backend errors), `rag` hit list, and trademark disclaimer.
 
-**Validation loop** (optional — only when `PYNE_SERVICE` or `PYNE_WORKER_URL` is set):
+**Validation loop** — backends in preference order (`mode` reports which won):
 
 ```text
 generate (Workers AI™)
     → extract ```pine
-    → [if pyne-worker configured]
-         POST pyne-worker /run (synthetic OHLCV)
-         → ok? return
-         → else: fix prompt with error → retry (max_retries)
+    → [pyne-worker configured]  POST /run (synthetic OHLCV)          → mode "hoox"
+    → [else AXIS_MCP_URL set]   AXIS axis_run (synthetic OHLCV)      → mode "axis"
     → [else] return draft as-is (standalone)
+    → ok? return
+    → else: fix prompt with error → retry (max_retries)
 ```
 
 - Standalone users: no config needed; loop is skipped.
 - Disable even when configured: `"validate": false`.
+- Chit-chat (`hi`, `thanks`) never enters the loop — no script was asked for.
+- `NO_BACKEND` (AXIS worker itself has no eval backend) is **not retried**:
+  one attempt, then skipped with a `_Note:_` naming the fix
+  (`EXTERNAL_BACKEND` or `PYODIDE_IN_WORKER` on the AXIS worker).
 
 ## Configuration
 

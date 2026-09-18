@@ -63,6 +63,11 @@ Standalone-first: **Workers AI only** is enough. AI Search, Vectorize, R2, D1, p
 | `search_knowledge_base` | AI Search hybrid → Vectorize fallback; isolate-level TTL cache |
 | `validate_pine` | Heuristic lint + safe auto-fixes (`security`→`request.security`) |
 | `render_axis_chart` | Structural AXIS pane layout JSON for the plugin |
+| `axis_mcp_status` | AXIS wiring probe (endpoint, reachability, tool count, bridged tabs) |
+| `axis_mcp_tools` | Cached AXIS MCP tool catalog |
+| `axis_control` | Escape-hatch call for any AXIS MCP tool |
+| `axis_run_pine` | Lint → AXIS `axis_run` → real engine result (write→run→fix primitive) |
+| `axis_app` | App-plane control (`editor.*`, `chart.*`, `results.*`, …) |
 
 ## Edge cases
 
@@ -73,6 +78,8 @@ Standalone-first: **Workers AI only** is enough. AI Search, Vectorize, R2, D1, p
 | AI Search missing | Vectorize retrieve; empty → conservative prompt |
 | Malformed tool args | Zod schemas reject before execute |
 | Off-topic prompt | Short refusal, no tool loop |
+| Chit-chat (`hi`, `thanks`) | `wantsPineScript` rejects → single conversational pass, no validate loop (a forced fence goads hallucinated "revised" scripts) |
+| AXIS `NO_BACKEND` | `validateOnAxisMcp` returns skipped (not failed) with the operator fix; loop stops after 1 attempt and the reply carries a `_Note:_` instead of retrying a permanently-incapable backend |
 | `API_KEY` set | REST + MCP require key; WS upgrade currently open for agent clients (tighten with ticket auth if needed) |
 
 ## Validation
