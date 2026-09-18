@@ -13,7 +13,6 @@ export type LlmPackDoc = {
   text: string;
 };
 
-const FILE_RE = /^FILE:\s+(\S+)\s*$/m;
 const FRONT_TITLE = /^title:\s*"?([^"\n]+)"?\s*$/m;
 const FRONT_DESC = /^description:\s*"?([^"\n]+)"?\s*$/m;
 
