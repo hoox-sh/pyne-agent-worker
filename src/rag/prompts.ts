@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { MARKS, DISCLAIMER_SHORT } from "../lib/legal";
-import { buildAxisControlSection, buildTradingCraftSection } from "../axis/prompts";
+import {
+  detectPersona,
+  normalizePersona,
+  personaSystemSection,
+  type PersonaId,
+} from "../agent/personas";
 import type { RagChunk } from "./retrieve";
 
 /**
@@ -12,9 +17,14 @@ import type { RagChunk } from "./retrieve";
 export function buildSystemPrompt(opts?: {
   pineVersion?: "v5" | "v6" | "auto";
   style?: "indicator" | "strategy" | "library" | "auto";
+  persona?: PersonaId;
+  /** Latest user message (drives auto-detection). */
+  userText?: string;
 }): string {
   const ver = opts?.pineVersion ?? "auto";
   const style = opts?.style ?? "auto";
+  const explicit = normalizePersona(opts?.persona);
+  const persona = explicit !== "auto" ? explicit : detectPersona(opts?.userText || "");
 
   return [
     `You are **PYNE Agent**, an expert assistant that writes ${MARKS.pine} code`,
@@ -37,12 +47,11 @@ export function buildSystemPrompt(opts?: {
     `- Target version preference: ${ver}. Script kind preference: ${style}.`,
     `- Prefer code that parses and evaluates cleanly on PYNE/AXIS. (Optional: operator may validate via pyne-worker; not required.)`,
     ``,
-    buildTradingCraftSection(),
-    ``,
-    // NOTE: the REST path has no function tools — this section documents the
-    // AXIS MCP surfaces the operator can wire (and what the Agents SDK path
-    // drives automatically). Keep it in lockstep with agent/prompts-v6.ts.
-    buildAxisControlSection(),
+    // Persona stance (pine coder / AXIS operator / trader). The REST path has
+    // no function tools — the AXIS sections document the MCP surfaces the
+    // operator can wire (and what the Agents SDK path drives automatically).
+    // Keep in lockstep with agent/prompts-v6.ts.
+    personaSystemSection(persona),
     ``,
     `## Output format`,
     `Pick **one** mode (A = script, B = how-to, C = small-talk). Do not mix an AXIS tutorial with a filler script.`,

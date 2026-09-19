@@ -57,6 +57,11 @@ export type ValidateLoopOpts = {
   /** Extra retries after first failure (default 2 → up to 3 generates) */
   maxRetries?: number;
   validateMode?: "interpret" | "compile" | "auto";
+  /**
+   * Prefetched first attempt (e.g. from the agentic tool loop). Counts as
+   * attempt 1: pine is extracted and validated, retries continue via chatFn.
+   */
+  seedResult?: ChatResult | null;
   /** Test injectables */
   chatFn?: ChatFn;
   validateFn?: ValidateFn;
@@ -167,11 +172,20 @@ export async function generateValidateRetry(
   const maxAttempts = wantValidate ? maxRetries + 1 : 1;
 
   for (let i = 0; i < maxAttempts; i++) {
-    const result = await chatFn(opts.env, messages, {
-      temperature: opts.temperature,
-      maxTokens: opts.maxTokens,
-      model: opts.model,
-    });
+    let result: ChatResult;
+    if (i === 0 && opts.seedResult) {
+      result = {
+        text: opts.seedResult.text,
+        model: opts.seedResult.model,
+        latencyMs: opts.seedResult.latencyMs,
+      };
+    } else {
+      result = await chatFn(opts.env, messages, {
+        temperature: opts.temperature,
+        maxTokens: opts.maxTokens,
+        model: opts.model,
+      });
+    }
     last = result;
     totalLatency += result.latencyMs;
     const pine = extractPineBlock(result.text);

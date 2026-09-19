@@ -1,0 +1,51 @@
+// HOOX / PYNE example template (not a TradingView® built-in).
+// Risk-managed strategy skeleton: explicit capital, commission, slippage,
+// pyramiding, ATR-based risk, and alert() hooks. Start here.
+// Pine Script™ is a trademark of TradingView, Inc.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//@version=6
+strategy(
+     "Risk Skeleton",
+     overlay=true,
+     initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=10,
+     commission_type=strategy.commission.percent,
+     commission_value=0.05,
+     slippage=2,
+     pyramiding=0
+)
+
+// Inputs — every magic number is an input.
+risk_pct     = input.float(1.0, "Risk % per trade", minval=0.1, maxval=5.0, step=0.1)
+atr_len      = input.int(14, "ATR length", minval=1)
+atr_mult     = input.float(2.0, "ATR stop multiple", minval=0.5, step=0.5)
+fast_len     = input.int(21, "Fast EMA", minval=1)
+slow_len     = input.int(50, "Slow EMA", minval=2)
+use_trend    = input.bool(true, "Trade with trend only")
+
+fast = ta.ema(close, fast_len)
+slow = ta.ema(close, slow_len)
+atr  = ta.atr(atr_len)
+
+trend_up = fast > slow
+long_sig  = ta.crossover(fast, slow) and (trend_up or not use_trend)
+short_sig = ta.crossunder(fast, slow) and (not trend_up or not use_trend)
+
+// Size from equity and stop distance: risk a fixed % of equity.
+stop_dist   = atr * atr_mult
+risk_cash   = strategy.equity * risk_pct / 100
+qty_note    = risk_cash / stop_dist  // informational; entries use percent_of_equity
+
+if long_sig
+    strategy.entry("L", strategy.long)
+    strategy.exit("Lx", "L", stop=close - stop_dist)
+    alert("LONG " + syminfo.ticker + " risk=" + str.tostring(risk_cash, format.mintick), alert.freq_once_per_bar)
+
+if short_sig
+    strategy.entry("S", strategy.short)
+    strategy.exit("Sx", "S", stop=close + stop_dist)
+    alert("SHORT " + syminfo.ticker + " risk=" + str.tostring(risk_cash, format.mintick), alert.freq_once_per_bar)
+
+plot(fast, "Fast", color.teal)
+plot(slow, "Slow", color.orange)

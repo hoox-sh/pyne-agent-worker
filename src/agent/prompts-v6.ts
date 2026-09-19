@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { DISCLAIMER_SHORT, MARKS } from "../lib/legal";
-import { buildAxisControlSection, buildTradingCraftSection } from "../axis/prompts";
+import {
+  detectPersona,
+  normalizePersona,
+  personaSystemSection,
+  type PersonaId,
+} from "./personas";
 
 /**
  * System instructions for the stateful Agents SDK path (AIChatAgent).
@@ -11,9 +16,15 @@ import { buildAxisControlSection, buildTradingCraftSection } from "../axis/promp
 export function buildAgentSystemPrompt(opts?: {
   pineVersion?: "v5" | "v6" | "auto";
   style?: "indicator" | "strategy" | "library" | "auto";
+  /** Explicit persona, or detected from `lastUserText` when auto/omitted. */
+  persona?: PersonaId;
+  /** Latest user message (drives auto-detection). */
+  lastUserText?: string;
 }): string {
   const ver = opts?.pineVersion ?? "auto";
   const style = opts?.style ?? "auto";
+  const explicit = normalizePersona(opts?.persona);
+  const persona = explicit !== "auto" ? explicit : detectPersona(opts?.lastUserText || "");
   const versionLine =
     ver === "v5"
       ? "Target //@version=5 when the user insists on v5."
@@ -34,9 +45,7 @@ export function buildAgentSystemPrompt(opts?: {
     `  validate_pine before final delivery, render_axis_chart when visualization helps.`,
     `  axis_mcp_status first when the user wants anything run, loaded, or checked on AXIS.`,
     ``,
-    buildTradingCraftSection(),
-    ``,
-    buildAxisControlSection(),
+    personaSystemSection(persona),
     ``,
     `## Pine Script™ v6 hard rules`,
     `- ${versionLine}`,
@@ -93,21 +102,38 @@ export function buildAgentSystemPrompt(opts?: {
   ].join("\n");
 }
 
-/** Off-topic / injection refusal helpers used by security checks. */
+/** Scope guard: block abuse + unrelated coding, allow trading AND app talk. */
 export function looksOffTopic(userText: string): boolean {
   const t = userText.toLowerCase();
+  // Abuse / prompt-injection always refused
+  if (
+    /\b(hack|malware|bypass captcha|sql injection|ddos|phishing|steal .*password)\b/.test(t) ||
+    /\b(ignore (all )?previous instructions|system prompt|reveal .*instructions)\b/.test(t)
+  ) {
+    return true;
+  }
+  // Generic non-trading, non-app coding tasks stay out (before the
+  // app-talk allowlist: "react app" contains "app" but is not AXIS talk)
+  if (
+    /\b(write me a (react|django|rails|express|vue|angular|flutter) app|homework|essay)\b/.test(t)
+  ) {
+    return true;
+  }
   // Trading-related always allowed
   if (
-    /\b(pine|pyne|indicator|strategy|overlay|rsi|macd|atr|ema|sma|ohlc|chart|axis|trading|crypto|forex|stock)\b/.test(
+    /\b(pine|pyne|indicator|strategy|overlay|rsi|macd|atr|ema|sma|ohlc|chart|axis|trading|crypto|forex|stock|market|trade|buy|sell|long|short|risk|backtest|alert)\b/.test(
       t
     )
   ) {
     return false;
   }
-  // Explicit non-trading intents
-  return (
-    /\b(write me a (react|django|rails|express) app|hack|malware|bypass captcha|sql injection)\b/.test(
+  // AXIS app talk always allowed (settings, theme, panels, how-to…)
+  if (
+    /\b(app|setting|theme|panel|layout|watchlist|workspace|plugin|manager|button|dialog|tab|mcp|backfill|engine|stream|how (do|to|can) i|where (is|do i))\b/.test(
       t
-    ) || /\b(ignore (all )?previous instructions|system prompt)\b/.test(t)
-  );
+    )
+  ) {
+    return false;
+  }
+  return false;
 }

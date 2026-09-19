@@ -55,6 +55,24 @@ Standalone-first: **Workers AI only** is enough. AI Search, Vectorize, R2, D1, p
 - Agent instance name **is** the session id: `/agents/pyne-agent/<session>`.
 - Each session is a separate Durable Object — chat history does not bleed across users.
 - Prefer opaque random session ids from the client (do not reuse public user emails as names without hashing).
+- Session state carries `pineVersion`, `style`, **`persona`** (`auto` default; validated on write). `auto` re-detects per turn.
+
+## Personas
+
+`src/agent/personas.ts` — detection (`detectPersona`), action gating
+(`looksActionable`), and prompt composition (`personaSystemSection`, prose in
+`src/axis/prompts.ts` so REST + SDK stay in lockstep).
+
+| Persona | System adds | Acts? |
+|---------|-------------|-------|
+| `pine` | Trading craft + AXIS control manual | validate/run loop only |
+| `axis` | Control manual + operator policy (read-before-write, confirm-before-destructive) | yes — bounded tool loop on REST, full loop on SDK |
+| `trader` | Trader desk (analysis frame, invalidation, risk math, psychology) + control manual | yes — market/result context first |
+
+REST (`POST /v1/chat`) runs the agentic loop only when actionable
+(`axis`/`trader` + action verb, ≤4 steps); the output seeds the
+validate loop as attempt 1 and surfaces as `mcp_actions`. Anything else
+stays single-shot.
 
 ## Tools
 

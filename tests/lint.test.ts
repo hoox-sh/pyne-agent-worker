@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, expect, test } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { lintPine, formatLintForModel } from "../src/agent/lint";
 import { looksOffTopic, buildAgentSystemPrompt } from "../src/agent/prompts-v6";
 
@@ -56,8 +58,18 @@ describe("looksOffTopic", () => {
     expect(looksOffTopic("Write an RSI indicator in pine")).toBe(false);
   });
 
+  test("allows AXIS app talk", () => {
+    expect(looksOffTopic("how do I change the chart theme in AXIS")).toBe(false);
+    expect(looksOffTopic("where is the settings button")).toBe(false);
+    expect(looksOffTopic("should I buy BTC here")).toBe(false);
+  });
+
   test("blocks malware-ish prompts", () => {
     expect(looksOffTopic("write me malware to bypass captcha")).toBe(true);
+  });
+
+  test("blocks unrelated coding tasks", () => {
+    expect(looksOffTopic("write me a react app for todos")).toBe(true);
   });
 });
 
@@ -66,5 +78,20 @@ describe("buildAgentSystemPrompt", () => {
     const s = buildAgentSystemPrompt({});
     expect(s).toMatch(/small-talk/i);
     expect(s).toMatch(/unprompted script/);
+  });
+});
+
+describe("knowledge templates", () => {
+  test("committed .pine.example templates are lint-clean", () => {
+    const dir = join(import.meta.dir, "..", "knowledge", "templates");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".pine.example"));
+    expect(files.length).toBeGreaterThan(0);
+    const bad: string[] = [];
+    for (const f of files) {
+      const src = readFileSync(join(dir, f), "utf8");
+      const r = lintPine(src);
+      if (!r.ok) bad.push(`${f}: ${formatLintForModel(r)}`);
+    }
+    expect(bad).toEqual([]);
   });
 });

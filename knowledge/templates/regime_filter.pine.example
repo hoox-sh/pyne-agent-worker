@@ -1,0 +1,26 @@
+// HOOX / PYNE example template (not a TradingView® built-in).
+// Trend-regime filter library: gate entries on tradable trend, skip chop.
+// Pine Script™ is a trademark of TradingView, Inc.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//@version=6
+library("RegimeFilter")
+
+// True when the market is tradable trend (not chop).
+export trending(fast_len, slow_len, adx_len, adx_min, atr_len, atr_mult, min_sep) =>
+    fast = ta.ema(close, fast_len)
+    slow = ta.ema(close, slow_len)
+    [dmi_plus, dmi_minus, adx] = ta.dmi(adx_len, adx_len)
+    atr = ta.atr(atr_len)
+    atr_mean = ta.sma(atr, atr_len * 2)
+    // Stacked EMAs with real separation (in ATR units), not just inequality.
+    separation = math.abs(fast - slow) / atr
+    stacked = separation >= min_sep
+    strong = adx >= adx_min
+    expanding = atr >= atr_mean * atr_mult
+    stacked and strong and expanding
+
+// +1 uptrend, -1 downtrend, 0 no edge (flat = do nothing).
+export direction(fast_len, slow_len) =>
+    fast = ta.ema(close, fast_len)
+    slow = ta.ema(close, slow_len)
+    fast > slow ? 1 : fast < slow ? -1 : 0

@@ -18,6 +18,8 @@ import {
   listMessages,
 } from "../rag/sessions";
 import { generateValidateRetry, isAnyValidateAvailable } from "../rag/validate-loop";
+import { runAgenticChat, type AgenticAction } from "../rag/agentic";
+import { detectPersona, looksActionable, normalizePersona } from "../agent/personas";
 import { isAxisMcpConfigured } from "../axis/mcp-client";
 
 export type ChatBody = {
@@ -33,6 +35,8 @@ export type ChatBody = {
   pine_version?: "v5" | "v6" | "auto";
   /** Prefer indicator | strategy | library */
   style?: "indicator" | "strategy" | "library" | "auto";
+  /** Persona stance: auto (detect) | pine | axis | trader */
+  persona?: "auto" | "pine" | "axis" | "trader";
   /** Skip Vectorize retrieval (debug) */
   no_rag?: boolean;
   temperature?: number;
@@ -101,6 +105,8 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
   const system = buildSystemPrompt({
     pineVersion: body.pine_version,
     style: body.style,
+    persona: normalizePersona(body.persona),
+    userText,
   });
   const augmented = buildUserAugmentedMessage(userText, chunks);
 
@@ -109,6 +115,36 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     ...history.filter((m) => m.role !== "system").slice(-20),
     { role: "user", content: augmented },
   ];
+
+  const persona = detectPersona(userText, body.persona);
+  const actionable =
+    isAxisMcpConfigured(env) && looksActionable(userText, persona);
+
+  // Operator path: let the model ACT first (bounded tool loop), then feed
+  // its output through the normal generate→validate→retry loop as attempt 1.
+  // Any agentic failure falls back to the single-shot loop below.
+  let seedResult: { text: string; model: string; latencyMs: number } | null = null;
+  let mcpActions: AgenticAction[] = [];
+  if (actionable) {
+    try {
+      const agentic = await runAgenticChat(env, {
+        system,
+        messages,
+        maxSteps: 4,
+        temperature: body.temperature,
+        maxTokens: body.max_tokens,
+        model: body.model,
+      });
+      seedResult = {
+        text: agentic.text,
+        model: agentic.model,
+        latencyMs: agentic.latencyMs,
+      };
+      mcpActions = agentic.actions;
+    } catch {
+      seedResult = null;
+    }
+  }
 
   const maxRetries = parseMaxRetries(body.max_retries, env.VALIDATE_MAX_RETRIES);
   const validateDefault =
@@ -128,6 +164,7 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       maxRetries,
       validateMode: body.validate_mode || "interpret",
       requirePine: wantsPineScript(userText),
+      seedResult,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -157,6 +194,8 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     ok: true,
     mode: isValidateAvailable(env) ? "hoox" : axisWired ? "axis" : "standalone",
     axis_mcp: axisWired,
+    persona,
+    mcp_actions: mcpActions,
     session_id: sessionId || null,
     reply: loopResult.text,
     pine: loopResult.pine,

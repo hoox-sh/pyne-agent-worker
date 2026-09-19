@@ -215,6 +215,7 @@ Published AXIS docs (after site sync):
   "message": "v6 RSI strategy with ATR trailing stop for AXIS",
   "pine_version": "v6",
   "style": "strategy",
+  "persona": "auto",
   "session_id": null,
   "validate": true,
   "max_retries": 2
@@ -241,6 +242,26 @@ generate (Workers AI™)
 - `NO_BACKEND` (AXIS worker itself has no eval backend) is **not retried**:
   one attempt, then skipped with a `_Note:_` naming the fix
   (`EXTERNAL_BACKEND` or `PYODIDE_IN_WORKER` on the AXIS worker).
+
+## Personas (one agent, three stances)
+
+| Persona | Role |
+|---------|------|
+| `pine` (default) | Pine Script™ coder — production indicators, strategies, libraries |
+| `axis` | AXIS guide + **operator** — answers anything about the app and *changes* it via MCP |
+| `trader` | Trading mentor/analyst — market analysis, trade review, risk math, psychology |
+| `auto` | Inferred per message (explicit selection always wins) |
+
+Set via `"persona"` on `/v1/chat`, the AXIS plugin's **Persona** field, or
+Agents SDK session state. Small-talk (`hi`) is persona-independent: one
+friendly line + one question, never an unprompted script.
+
+When the request wants action (`axis`/`trader` + action verbs like *change,
+load, run, analyze*), `/v1/chat` runs a bounded server-side tool loop first
+(max 4 steps) and feeds the result through validation as attempt 1 — the
+reply carries `mcp_actions` (what was actually done). Pure questions skip
+the loop (no GPU burned). Destructive acts (workspace import, library
+remove, settings outside basics) ask first; everything else just happens.
 
 ## Configuration
 

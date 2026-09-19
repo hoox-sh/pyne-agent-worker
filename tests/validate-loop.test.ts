@@ -199,4 +199,65 @@ describe("generateValidateRetry", () => {
     expect(result.validated).toBe(true);
     expect(result.retries).toBe(1);
   });
+
+  test("seedResult counts as attempt 1 without calling chatFn", async () => {
+    let chatCalls = 0;
+    let validateCalls = 0;
+    const result = await generateValidateRetry({
+      env: {} as Env,
+      messages: [{ role: "user", content: "x" }],
+      maxRetries: 1,
+      validate: true,
+      seedResult: {
+        text: "```pine\n//@version=6\nindicator('x')\nplot(close)\n```",
+        model: "seed-model",
+        latencyMs: 5,
+      },
+      chatFn: async () => {
+        chatCalls += 1;
+        return { text: "unused", model: "m", latencyMs: 1 };
+      },
+      validateFn: async () => {
+        validateCalls += 1;
+        return { ok: true, latency_ms: 1 };
+      },
+    });
+    expect(result.validated).toBe(true);
+    expect(result.retries).toBe(0);
+    expect(result.attempts.length).toBe(1);
+    expect(result.attempts[0]?.model).toBe("seed-model");
+    expect(chatCalls).toBe(0);
+    expect(validateCalls).toBe(1);
+  });
+
+  test("seedResult failure retries through chatFn", async () => {
+    let chatCalls = 0;
+    const result = await generateValidateRetry({
+      env: {} as Env,
+      messages: [{ role: "user", content: "x" }],
+      maxRetries: 1,
+      validate: true,
+      seedResult: {
+        text: "```pine\n//@version=6\nindicator('x')\nplot(close)\n```",
+        model: "seed-model",
+        latencyMs: 5,
+      },
+      chatFn: async () => {
+        chatCalls += 1;
+        return {
+          text: "```pine\n//@version=6\nindicator('y')\nplot(open)\n```",
+          model: "m",
+          latencyMs: 1,
+        };
+      },
+      validateFn: async (_env, { script }) => ({
+        ok: script.includes("indicator('y')"),
+        error: script.includes("indicator('y')") ? undefined : "bad",
+        latency_ms: 1,
+      }),
+    });
+    expect(result.validated).toBe(true);
+    expect(result.retries).toBe(1);
+    expect(chatCalls).toBe(1);
+  });
 });

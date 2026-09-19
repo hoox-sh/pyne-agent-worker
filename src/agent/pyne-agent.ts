@@ -20,11 +20,13 @@ import {
 } from "ai";
 import { createAgentTools } from "./tools";
 import { buildAgentSystemPrompt, looksOffTopic } from "./prompts-v6";
+import { normalizePersona, type PersonaId } from "./personas";
 import { resolveChatModel } from "./gateway";
 
 export type PyneAgentState = {
   pineVersion: "v5" | "v6" | "auto";
   style: "indicator" | "strategy" | "library" | "auto";
+  persona: PersonaId;
   turnCount: number;
 };
 
@@ -38,6 +40,7 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
   initialState: PyneAgentState = {
     pineVersion: "auto",
     style: "auto",
+    persona: "auto",
     turnCount: 0,
   };
 
@@ -52,6 +55,9 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
     const allowedStyle = new Set(["indicator", "strategy", "library", "auto"]);
     if (!allowedVer.has(next.pineVersion)) {
       throw new Error("invalid pineVersion");
+    }
+    if (normalizePersona(next.persona) !== next.persona) {
+      throw new Error("invalid persona");
     }
     if (!allowedStyle.has(next.style)) {
       throw new Error("invalid style");
@@ -71,10 +77,11 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
     const lastText = extractText(lastUser);
 
     if (lastText && looksOffTopic(lastText)) {
-      // Guardrail: refuse off-topic without spending GPU on tools
+      // Guardrail: refuse abuse / unrelated coding without spending GPU
       const body = [
-        "I only help with Pine Script™ / PYNE trading scripts, chart layout,",
-        "and AXIS integration. Please rephrase as a trading-script request.",
+        "I help with Pine Script™ trading scripts, market analysis, and the",
+        "AXIS app (including changing it for you). Please rephrase as a",
+        "trading or AXIS request.",
       ].join(" ");
       return new Response(body, {
         headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -90,6 +97,8 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
     const system = buildAgentSystemPrompt({
       pineVersion: this.state.pineVersion,
       style: this.state.style,
+      persona: normalizePersona(this.state.persona),
+      lastUserText: lastText,
     });
 
     const run = async (useFallback: boolean) => {
