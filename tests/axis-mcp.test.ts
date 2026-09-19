@@ -14,6 +14,7 @@ import {
   axisMcpListTools,
   axisMcpStatus,
   axisRpc,
+  axisRunPine,
   isAxisMcpConfigured,
   isCallableAxisTool,
   validateOnAxisMcp,
@@ -236,6 +237,76 @@ describe("app plane", () => {
 });
 
 describe("validate via AXIS", () => {
+  test("axisRunPine sends script+data only (no ticker/timeframe)", async () => {
+    let args: Record<string, unknown> | null = null;
+    const restore = mockFetch((_url, init) => {
+      const rpc = JSON.parse(String(init?.body || "{}")) as {
+        params?: { arguments?: Record<string, unknown> };
+      };
+      args = rpc.params?.arguments ?? null;
+      return rpcOk({
+        content: [{ type: "text", text: '{"ok":true}' }],
+        structuredContent: { ok: true },
+      });
+    });
+    try {
+      await axisRunPine(ENV, {
+        script: "//@version=6\nindicator('x')\nplot(close)",
+        symbol: "BTCUSDT",
+        timeframe: "1h",
+      });
+      const payload = args as Record<string, unknown> | null;
+      expect(payload).toBeTruthy();
+      expect(payload).toHaveProperty("script");
+      expect(payload).toHaveProperty("data");
+      expect(Array.isArray(payload?.data)).toBe(true);
+      expect(payload).not.toHaveProperty("ticker");
+      expect(payload).not.toHaveProperty("timeframe");
+      expect(payload).not.toHaveProperty("symbol");
+    } finally {
+      restore();
+    }
+  });
+
+  test("UNKNOWN_FIELDS is skipped (not a Pine retry)", async () => {
+    const restore = mockFetch(() =>
+      rpcOk({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              ok: false,
+              status: 400,
+              body: {
+                status: "error",
+                code: "UNKNOWN_FIELDS",
+                message: "Unexpected field(s): ['ticker', 'timeframe'].",
+              },
+            }),
+          },
+        ],
+        structuredContent: {
+          ok: false,
+          status: 400,
+          body: {
+            status: "error",
+            code: "UNKNOWN_FIELDS",
+            message: "Unexpected field(s): ['ticker', 'timeframe'].",
+          },
+        },
+      })
+    );
+    try {
+      const r = await validateOnAxisMcp(ENV, { script: "indicator('x')" });
+      expect(r.ok).toBe(false);
+      expect(r.skipped).toBe(true);
+      expect(r.retryable).toBe(false);
+      expect(r.error).toMatch(/ticker/);
+    } finally {
+      restore();
+    }
+  });
+
   test("skipped when unconfigured", async () => {
     const r = await validateOnAxisMcp({} as Env, { script: "indicator('x')" });
     expect(r.skipped).toBe(true);

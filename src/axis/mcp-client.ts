@@ -282,11 +282,12 @@ export async function axisRunPine(
   const script = String(opts.script || "").trim();
   if (!script) return { ok: false, error: "empty script" };
   const bars = Math.max(16, Math.min(500, Math.floor(opts.bars || 128)));
+  // AXIS MCP catalog lists ticker/timeframe, but the Worker proxies the body
+  // to pynescript POST /run, whose schema rejects those extras
+  // (`Unexpected field(s): ['ticker', 'timeframe']`). Send only what /run accepts.
   const args: Record<string, unknown> = {
     script,
     data: syntheticBars(bars),
-    ticker: (opts.symbol || "SYNTH").toUpperCase(),
-    timeframe: opts.timeframe || "1m",
   };
   return axisMcpCallTool(env, "axis_run", args, rpcOpts);
 }
@@ -352,10 +353,16 @@ export async function validateOnAxisMcp(
   }
   const errText = axisScriptError(structured, body, text);
   if (errText) {
+    // Request-schema mismatches (ticker/timeframe extras, etc.) are not Pine
+    // bugs — retrying the model cannot fix the payload shape.
+    const schemaErr = isRunSchemaError(errText, body);
     return {
       ok: false,
+      skipped: schemaErr,
+      retryable: schemaErr ? false : undefined,
       backend: "axis-mcp",
       error: errText,
+      reason: schemaErr ? errText : undefined,
       latency_ms: latency(),
       raw: { truncated: res.truncated },
     };
@@ -368,6 +375,14 @@ export async function validateOnAxisMcp(
     latency_ms: latency(),
     raw: { truncated: res.truncated },
   };
+}
+
+function isRunSchemaError(err: string, body: Record<string, unknown>): boolean {
+  const code = String(body.code || "");
+  return (
+    /UNKNOWN_FIELDS|MISSING_FIELD|INVALID_FIELD|INVALID_BODY/i.test(code) ||
+    /Unexpected field/i.test(err)
+  );
 }
 
 /** Script-level AXIS engine failure (not infra). Null when the run succeeded. */
