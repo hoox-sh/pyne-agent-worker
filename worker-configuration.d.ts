@@ -60,4 +60,8 @@ interface Env {
   VALIDATE_DEFAULT?: string;
   /** Extra fix attempts after first validation failure (default 2). */
   VALIDATE_MAX_RETRIES?: string;
+  /** Optional extra Workers AI™ model ids allowed on POST /v1/chat (comma-separated). */
+  CHAT_MODELS?: string;
+  /** pyne-worker validate timeout in ms (default 20000, max 60000). */
+  PYNE_VALIDATE_TIMEOUT_MS?: string;
 }

@@ -4,7 +4,7 @@
 > backed by an optional private **Vectorize™** knowledge base. **AXIS** sister plugin.
 > (Targets the Pine Script™ language; not a TradingView® product.)
 
-**Version:** 0.2.0 · **Runtime:** Cloudflare Workers (TypeScript) · **License:** AGPL-3.0-or-later
+**Version:** 0.3.0 · **Runtime:** Cloudflare Workers (TypeScript) · **License:** AGPL-3.0-or-later
 
 _Pine Script™ and TradingView® are trademarks of TradingView, Inc.  
 Cloudflare® is a registered trademark of Cloudflare, Inc.  

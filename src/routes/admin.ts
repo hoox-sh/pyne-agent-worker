@@ -75,34 +75,41 @@ export async function handleAdminIndex(
     items.map((i) => i.text.slice(0, 6000))
   );
 
-  const upserts: VectorizeVector[] = [];
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    const values = vectors[i];
-    if (!it?.id || !values) continue;
-    const r2Key = `kb/${it.kind || "other"}/${it.id.replace(/[:/]/g, "_")}.json`;
-    await env.KB.put(
-      r2Key,
-      JSON.stringify({
-        id: it.id,
-        text: it.text,
-        title: it.title,
-        source: it.source,
-        kind: it.kind,
-      })
-    );
-    upserts.push({
-      id: it.id,
-      values,
-      metadata: {
-        title: it.title || "",
-        source: it.source || "",
-        kind: it.kind || "other",
-        r2_key: r2Key,
-        text: it.text.slice(0, 1200),
-      },
-    });
-  }
+  const prepared = items
+    .map((it, i) => {
+      const values = vectors[i];
+      if (!it?.id || !values) return null;
+      const r2Key = `kb/${it.kind || "other"}/${it.id.replace(/[:/]/g, "_")}.json`;
+      return { it, values, r2Key };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+
+  await Promise.all(
+    prepared.map((row) =>
+      env.KB.put(
+        row.r2Key,
+        JSON.stringify({
+          id: row.it.id,
+          text: row.it.text,
+          title: row.it.title,
+          source: row.it.source,
+          kind: row.it.kind,
+        })
+      )
+    )
+  );
+
+  const upserts: VectorizeVector[] = prepared.map((row) => ({
+    id: row.it.id,
+    values: row.values,
+    metadata: {
+      title: row.it.title || "",
+      source: row.it.source || "",
+      kind: row.it.kind || "other",
+      r2_key: row.r2Key,
+      text: row.it.text.slice(0, 1200),
+    },
+  }));
 
   if (upserts.length) {
     await env.VECTORIZE.upsert(upserts);

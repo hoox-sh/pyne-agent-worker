@@ -1,6 +1,6 @@
 # PYNE Agent — Agents SDK edge architecture
 
-Branch: `feat/agents-sdk-edge-architecture` · Service version **0.2.0**
+Branch: `feat/agents-sdk-edge-architecture` · Service version **0.3.0**
 
 _Pine Script™ and TradingView® are trademarks of TradingView, Inc.  
 Cloudflare® is a registered trademark of Cloudflare, Inc._
@@ -98,7 +98,7 @@ stays single-shot.
 | Off-topic prompt | Short refusal, no tool loop |
 | Chit-chat (`hi`, `thanks`) | `wantsPineScript` rejects → single conversational pass, no validate loop (a forced fence goads hallucinated "revised" scripts) |
 | AXIS `NO_BACKEND` | `validateOnAxisMcp` returns skipped (not failed) with the operator fix; loop stops after 1 attempt and the reply carries a `_Note:_` instead of retrying a permanently-incapable backend |
-| `API_KEY` set | REST + MCP require key; WS upgrade currently open for agent clients (tighten with ticket auth if needed) |
+| `API_KEY` set | REST + MCP + `/agents` (including WebSocket) require key; browser WS may pass `?api_key=` |
 
 ## Validation
 

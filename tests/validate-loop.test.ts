@@ -230,6 +230,36 @@ describe("generateValidateRetry", () => {
     expect(validateCalls).toBe(1);
   });
 
+  test("infra validate failure does not retry", async () => {
+    let chats = 0;
+    const result = await generateValidateRetry({
+      env: {} as Env,
+      messages: [{ role: "user", content: "x" }],
+      maxRetries: 2,
+      validate: true,
+      chatFn: async () => {
+        chats += 1;
+        return {
+          text: "```pine\n//@version=6\nindicator('x')\nplot(close)\n```",
+          model: "m",
+          latencyMs: 1,
+        };
+      },
+      validateFn: async () => ({
+        ok: false,
+        skipped: true,
+        retryable: false,
+        error: "AXIS MCP timeout after 20000ms",
+        reason: "AXIS MCP timeout after 20000ms",
+        latency_ms: 1,
+      }),
+    });
+    expect(chats).toBe(1);
+    expect(result.attempts.length).toBe(1);
+    expect(result.validated).toBe(false);
+    expect(result.text).toMatch(/timeout/i);
+  });
+
   test("seedResult failure retries through chatFn", async () => {
     let chatCalls = 0;
     const result = await generateValidateRetry({

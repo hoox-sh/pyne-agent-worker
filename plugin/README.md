@@ -19,6 +19,7 @@ https://<your-worker>.workers.dev/plugin/axis-pine-agent.js
 | `apiKey` | Worker `API_KEY` secret |
 | `pineVersion` | `auto` \| `v5` \| `v6` |
 | `style` | `auto` \| `indicator` \| `strategy` \| `library` |
+| `persona` | `auto` \| `pine` \| `axis` \| `trader` |
 
 ## Contract
 

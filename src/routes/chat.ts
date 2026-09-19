@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import type { ChatMessage } from "../ai/workers-ai";
+import {
+  clampMaxTokens,
+  clampTemperature,
+  ragTopK,
+  resolveRequestedModel,
+} from "../ai/models";
 import { errorJson, json, readJson } from "../lib/json";
 import { DISCLAIMER_SHORT, MARKS } from "../lib/legal";
 import { isValidateAvailable } from "../lib/pyne-worker";
@@ -10,7 +16,7 @@ import {
   buildUserAugmentedMessage,
   wantsPineScript,
 } from "../rag/prompts";
-import { retrieve } from "../rag/retrieve";
+import type { RagChunk } from "../rag/retrieve";
 import {
   appendMessage,
   createSession,
@@ -19,6 +25,7 @@ import {
 } from "../rag/sessions";
 import { generateValidateRetry, isAnyValidateAvailable } from "../rag/validate-loop";
 import { runAgenticChat, type AgenticAction } from "../rag/agentic";
+import { searchKnowledge } from "../agent/knowledge";
 import { detectPersona, looksActionable, normalizePersona } from "../agent/personas";
 import { isAxisMcpConfigured } from "../axis/mcp-client";
 
@@ -98,9 +105,27 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     sessionId = sessionId || "";
   }
 
-  const chunks = body.no_rag
-    ? []
-    : await retrieve(env, { query: userText }).catch(() => []);
+  const degraded: string[] = [];
+  let chunks: RagChunk[] = [];
+  let ragBackend = "none";
+  if (!body.no_rag) {
+    try {
+      const kn = await searchKnowledge(env, userText, ragTopK(env));
+      ragBackend = kn.backend;
+      chunks = kn.hits.map((h) => ({
+        id: h.id,
+        text: h.text,
+        title: h.title,
+        source: h.source,
+        score: h.score,
+        kind: "other",
+      }));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(JSON.stringify({ type: "rag_failed", error: msg }));
+      degraded.push("rag");
+    }
+  }
 
   const system = buildSystemPrompt({
     pineVersion: body.pine_version,
@@ -125,15 +150,18 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
   // Any agentic failure falls back to the single-shot loop below.
   let seedResult: { text: string; model: string; latencyMs: number } | null = null;
   let mcpActions: AgenticAction[] = [];
+  const model = resolveRequestedModel(env, body.model);
+  const temperature = clampTemperature(body.temperature);
+  const maxTokens = clampMaxTokens(body.max_tokens);
   if (actionable) {
     try {
       const agentic = await runAgenticChat(env, {
         system,
         messages,
         maxSteps: 4,
-        temperature: body.temperature,
-        maxTokens: body.max_tokens,
-        model: body.model,
+        temperature,
+        maxTokens,
+        model,
       });
       seedResult = {
         text: agentic.text,
@@ -141,7 +169,10 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
         latencyMs: agentic.latencyMs,
       };
       mcpActions = agentic.actions;
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(JSON.stringify({ type: "agentic_failed", error: msg }));
+      degraded.push("agentic");
       seedResult = null;
     }
   }
@@ -157,9 +188,9 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     loopResult = await generateValidateRetry({
       env,
       messages,
-      temperature: body.temperature,
-      maxTokens: body.max_tokens,
-      model: body.model,
+      temperature,
+      maxTokens,
+      model,
       validate,
       maxRetries,
       validateMode: body.validate_mode || "interpret",
@@ -237,7 +268,9 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
           : null,
       })),
     },
+    degraded,
     rag: {
+      backend: ragBackend,
       count: chunks.length,
       chunks: chunks.map((c) => ({
         id: c.id,

@@ -23,6 +23,7 @@ import {
   axisRunPine,
   isCallableAxisTool,
 } from "../axis/mcp-client";
+import { SERVICE_VERSION } from "../lib/version";
 
 type McpState = Record<string, never>;
 
@@ -33,7 +34,7 @@ function textResult(text: string) {
 export class PyneMcp extends McpAgent<Env, McpState, Record<string, never>> {
   server = new McpServer({
     name: "pyne-agent-mcp",
-    version: "0.3.0",
+    version: SERVICE_VERSION,
   });
 
   initialState: McpState = {};

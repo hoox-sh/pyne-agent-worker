@@ -1,6 +1,7 @@
 // Copyright (c) 2026 HOOX · PYNE · jango-blockchained
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { ragTopK } from "../ai/models";
 import { errorJson, json, readJson } from "../lib/json";
 import { retrieve } from "../rag/retrieve";
 
@@ -32,7 +33,7 @@ export async function handleSearch(
   try {
     const chunks = await retrieve(env, {
       query,
-      topK: Number.isFinite(topK) ? topK : 8,
+      topK: ragTopK(env, Number.isFinite(topK) ? topK : undefined),
       kinds,
     });
     return json({

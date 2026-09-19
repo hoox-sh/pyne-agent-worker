@@ -24,6 +24,7 @@
  */
 
 import { syntheticBars } from "../lib/synthetic-bars";
+import { SERVICE_VERSION } from "../lib/version";
 
 export const AXIS_MCP_PROTOCOL_VERSION = "2025-03-26";
 
@@ -229,9 +230,12 @@ export async function axisMcpListTools(
         })
         .filter((t) => t.name)
     : [];
-  const finalList = list.length ? list : toolsCache?.tools || [];
-  toolsCache = { at: Date.now(), tools: finalList };
-  return finalList;
+  if (list.length) {
+    toolsCache = { at: Date.now(), tools: list };
+    return list;
+  }
+  // Do not pin an empty catalog for the TTL after a blip.
+  return toolsCache?.tools || [];
 }
 
 /** Tool-name guardrail: allow AXIS worker/app tools, block path-like names. */
@@ -314,14 +318,20 @@ export async function validateOnAxisMcp(
     rpcOpts
   );
   if (!res.ok) {
+    // Transport / HTTP / JSON-RPC failure is not a Pine error — do not retry.
     return {
       ok: false,
+      skipped: true,
+      retryable: false,
       backend: "axis-mcp",
       error: res.error,
+      reason: res.error,
+      status: typeof res.code === "number" ? res.code : undefined,
       latency_ms: latency(),
     };
   }
-  // axis_run surfaces engine errors as result text / structured error fields.
+  // axis_run surfaces engine errors as structured fields — never scan the
+  // whole payload for the substring "error" ("error":null would false-fail).
   const structured = asRecord(res.structured);
   const body = asRecord(structured.body);
   const text = res.text || "";
@@ -332,6 +342,7 @@ export async function validateOnAxisMcp(
     return {
       ok: false,
       skipped: true,
+      retryable: false,
       backend: "axis-mcp",
       reason:
         "AXIS worker has no evaluation backend (NO_BACKEND): set EXTERNAL_BACKEND=<pyne-url> " +
@@ -339,9 +350,7 @@ export async function validateOnAxisMcp(
       latency_ms: latency(),
     };
   }
-  const errText =
-    (typeof structured.error === "string" && structured.error) ||
-    (/error/i.test(text) ? text.slice(0, 800) : "");
+  const errText = axisScriptError(structured, body, text);
   if (errText) {
     return {
       ok: false,
@@ -359,6 +368,30 @@ export async function validateOnAxisMcp(
     latency_ms: latency(),
     raw: { truncated: res.truncated },
   };
+}
+
+/** Script-level AXIS engine failure (not infra). Null when the run succeeded. */
+function axisScriptError(
+  structured: Record<string, unknown>,
+  body: Record<string, unknown>,
+  _text: string
+): string | null {
+  if (typeof structured.error === "string" && structured.error.trim()) {
+    return structured.error.trim();
+  }
+  if (typeof body.error === "string" && body.error.trim()) {
+    return body.error.trim();
+  }
+  if (body.status === "error" && typeof body.message === "string" && body.message) {
+    return body.message;
+  }
+  if (structured.ok === false) {
+    if (typeof body.message === "string" && body.message.trim()) {
+      return body.message.trim();
+    }
+    return "AXIS engine reported ok:false";
+  }
+  return null;
 }
 
 export type AxisAppOpts = {
@@ -459,7 +492,7 @@ export async function axisMcpStatus(
   const init = await axisRpc(env, "initialize", {
     protocolVersion: AXIS_MCP_PROTOCOL_VERSION,
     capabilities: {},
-    clientInfo: { name: "pyne-agent-worker", version: "0.3.0" },
+    clientInfo: { name: "pyne-agent-worker", version: SERVICE_VERSION },
   }, opts);
   if (!init.ok) {
     return {

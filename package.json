@@ -42,7 +42,7 @@
     "ingest:corpus": "bun run scripts/ingest-corpus.ts",
     "ingest:builtins": "bun run scripts/ingest-builtins.ts",
     "ingest:index": "bun run scripts/build-index.ts",
-    "predeploy": "bash scripts/legal-check.sh"
+    "predeploy": "bash scripts/legal-check.sh && cp plugin/axis-pine-agent.js public/plugin/axis-pine-agent.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250705.0",

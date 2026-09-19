@@ -1,7 +1,13 @@
 // Copyright (c) 2026 HOOX · PYNE · jango-blockchained
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { chatModel, embedModel } from "./models";
+import {
+  chatFallbackModel,
+  clampMaxTokens,
+  clampTemperature,
+  embedModel,
+  resolveRequestedModel,
+} from "./models";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -49,32 +55,48 @@ export async function embedQuery(env: Env, text: string): Promise<number[]> {
   return v;
 }
 
+function isRetryableModelError(msg: string): boolean {
+  return /timeout|overloaded|capacity|503|429/i.test(msg);
+}
+
 export async function chatComplete(
   env: Env,
   messages: ChatMessage[],
   opts?: { temperature?: number; maxTokens?: number; model?: string }
 ): Promise<ChatResult> {
-  const model = (opts?.model || chatModel(env)).trim();
+  const primary = resolveRequestedModel(env, opts?.model);
+  const fallback = chatFallbackModel(env);
   const started = Date.now();
+  const temperature = clampTemperature(opts?.temperature);
+  const maxTokens = clampMaxTokens(opts?.maxTokens);
 
-  const raw = (await env.AI.run(model as Parameters<Ai["run"]>[0], {
-    messages,
-    temperature: opts?.temperature ?? 0.2,
-    max_tokens: opts?.maxTokens ?? 4096,
-  })) as WorkersChatResponse;
+  const runOnce = async (model: string) => {
+    const raw = (await env.AI.run(model as Parameters<Ai["run"]>[0], {
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    })) as WorkersChatResponse;
 
-  const text =
-    raw.response ??
-    raw.result?.response ??
-    (typeof raw === "string" ? raw : "");
+    const text =
+      raw.response ??
+      raw.result?.response ??
+      (typeof raw === "string" ? raw : "");
 
-  if (!text || typeof text !== "string") {
-    throw new Error(`Chat model ${model} returned empty response`);
-  }
-
-  return {
-    text,
-    model,
-    latencyMs: Date.now() - started,
+    if (!text || typeof text !== "string") {
+      throw new Error(`Chat model ${model} returned empty response`);
+    }
+    return { text, model };
   };
+
+  try {
+    const r = await runOnce(primary);
+    return { ...r, latencyMs: Date.now() - started };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (fallback && fallback !== primary && isRetryableModelError(msg)) {
+      const r = await runOnce(fallback);
+      return { ...r, latencyMs: Date.now() - started };
+    }
+    throw e;
+  }
 }

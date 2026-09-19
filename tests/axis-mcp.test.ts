@@ -242,6 +242,36 @@ describe("validate via AXIS", () => {
     expect(r.backend).toBe("axis-mcp");
   });
 
+  test("ok when payload contains error:null", async () => {
+    const restore = mockFetch(() =>
+      rpcOk({
+        content: [{ type: "text", text: '{"ok":true,"error":null}' }],
+        structuredContent: { ok: true, error: null, plots: 1 },
+      })
+    );
+    try {
+      const r = await validateOnAxisMcp(ENV, {
+        script: "//@version=6\nindicator('x')\nplot(close)",
+      });
+      expect(r.ok).toBe(true);
+      expect(r.skipped).toBeUndefined();
+    } finally {
+      restore();
+    }
+  });
+
+  test("HTTP 500 is skipped (not a script error)", async () => {
+    const restore = mockFetch(() => new Response("nope", { status: 500 }));
+    try {
+      const r = await validateOnAxisMcp(ENV, { script: "indicator('x')" });
+      expect(r.ok).toBe(false);
+      expect(r.skipped).toBe(true);
+      expect(r.retryable).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
   test("ok on clean engine result", async () => {
     const restore = mockFetch(() =>
       rpcOk({

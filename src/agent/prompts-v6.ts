@@ -8,6 +8,7 @@ import {
   personaSystemSection,
   type PersonaId,
 } from "./personas";
+import { buildPineHardRules } from "./pine-rules";
 
 /**
  * System instructions for the stateful Agents SDK path (AIChatAgent).
@@ -25,12 +26,6 @@ export function buildAgentSystemPrompt(opts?: {
   const style = opts?.style ?? "auto";
   const explicit = normalizePersona(opts?.persona);
   const persona = explicit !== "auto" ? explicit : detectPersona(opts?.lastUserText || "");
-  const versionLine =
-    ver === "v5"
-      ? "Target //@version=5 when the user insists on v5."
-      : ver === "v6"
-        ? "Always target //@version=6."
-        : "Default to //@version=6 unless the user explicitly requests v5.";
 
   return [
     `You are **PYNE Agent**, a production coding agent that writes ${MARKS.pine}`,
@@ -47,25 +42,7 @@ export function buildAgentSystemPrompt(opts?: {
     ``,
     personaSystemSection(persona),
     ``,
-    `## Pine Script™ v6 hard rules`,
-    `- ${versionLine}`,
-    `- Use typed builtins: ta.*, math.*, str.*, array.*, map.*, matrix.*, request.*, strategy.*, input.*, log.*, footprint.*, volume_row.*`,
-    `- Prefer explicit type annotations on user-defined types (UDTs), enums, and methods.`,
-    `- History referencing uses [] (e.g. close[1]); never invent non-existent history APIs.`,
-    `- v6: bool is only true/false (never na); do not assign na to bool; cast numbers with bool().`,
-    `- v6: int/int keeps the fraction (5/2 == 2.5); wrap with int()/math.floor when you need a whole number.`,
-    `- v6: and/or are lazy — keep ta.* history calls in the global scope so they run every bar.`,
-    `- v6: request.*() is dynamic by default (series symbol/timeframe; allowed in loops).`,
-    `- Strategies: wrap strategy.entry / exit / close in if-blocks. The \`when=\` parameter was removed in v6.`,
-    `- Do not use transp=; use color.new(color, transparency). Default strategy margins are 100.`,
-    `- timeframe.period always includes a multiplier (\"1D\", not \"D\").`,
-    `- Prefer enum + input.enum for dropdowns. input.* accepts active= to disable a field.`,
-    `- force_overlay=true pins a plot/drawing to the main pane from a separate-pane script.`,
-    `- Volume footprint: request.footprint() + footprint.* / volume_row.* (January 2026).`,
-    `- No \`security()\` alias — use request.security.`,
-    `- No inventing ta.* functions; if unsure, call search_knowledge_base.`,
-    `- series vs simple type rules: do not pass series where simple is required without nz/fix.`,
-    `- Scripts must include //@version=… and indicator()/strategy()/library() declaration.`,
+    buildPineHardRules(ver),
     ``,
     `## AXIS (charting PWA)`,
     `- AXIS evaluates via EnginePlugin.run (server POST /run or in-browser Pyodide). It is not TradingView®.`,
@@ -102,38 +79,24 @@ export function buildAgentSystemPrompt(opts?: {
   ].join("\n");
 }
 
-/** Scope guard: block abuse + unrelated coding, allow trading AND app talk. */
+/**
+ * Scope guard: denylist only (abuse / injection / unrelated app scaffolds).
+ * Trading, AXIS, and everything else is allowed — false refusals are worse
+ * than answering a vague prompt.
+ */
 export function looksOffTopic(userText: string): boolean {
   const t = userText.toLowerCase();
-  // Abuse / prompt-injection always refused
   if (
     /\b(hack|malware|bypass captcha|sql injection|ddos|phishing|steal .*password)\b/.test(t) ||
     /\b(ignore (all )?previous instructions|system prompt|reveal .*instructions)\b/.test(t)
   ) {
     return true;
   }
-  // Generic non-trading, non-app coding tasks stay out (before the
-  // app-talk allowlist: "react app" contains "app" but is not AXIS talk)
+  // "react app" contains "app" but is not AXIS talk.
   if (
     /\b(write me a (react|django|rails|express|vue|angular|flutter) app|homework|essay)\b/.test(t)
   ) {
     return true;
-  }
-  // Trading-related always allowed
-  if (
-    /\b(pine|pyne|indicator|strategy|overlay|rsi|macd|atr|ema|sma|ohlc|chart|axis|trading|crypto|forex|stock|market|trade|buy|sell|long|short|risk|backtest|alert)\b/.test(
-      t
-    )
-  ) {
-    return false;
-  }
-  // AXIS app talk always allowed (settings, theme, panels, how-to…)
-  if (
-    /\b(app|setting|theme|panel|layout|watchlist|workspace|plugin|manager|button|dialog|tab|mcp|backfill|engine|stream|how (do|to|can) i|where (is|do i))\b/.test(
-      t
-    )
-  ) {
-    return false;
   }
   return false;
 }

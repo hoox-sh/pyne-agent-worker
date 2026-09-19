@@ -42,45 +42,73 @@ export async function retrieve(
     return [];
   }
 
-  const topK = opts.topK ?? ragTopK(env);
+  const topK = ragTopK(env, opts.topK);
   const vector = await embedQuery(env, opts.query);
 
-  const result = await env.VECTORIZE.query(vector, {
+  const queryOpts: VectorizeQueryOptions = {
     topK,
     returnMetadata: "all",
     returnValues: false,
-  });
+  };
+  if (opts.kinds?.length === 1 && opts.kinds[0]) {
+    queryOpts.filter = { kind: opts.kinds[0] };
+  }
+
+  const result = await env.VECTORIZE.query(vector, queryOpts);
 
   const matches = result.matches ?? [];
-  const chunks: RagChunk[] = [];
-
-  for (const m of matches) {
+  const pending = matches.map((m) => {
     const meta = (m.metadata || {}) as Record<string, unknown>;
     const kind = String(meta.kind || "other");
-    if (opts.kinds?.length && !opts.kinds.includes(kind)) continue;
-
-    let text = String(meta.text || meta.snippet || "");
+    const text = String(meta.text || meta.snippet || "");
     const r2Key = meta.r2_key != null ? String(meta.r2_key) : "";
+    return { m, meta, kind, text, r2Key };
+  });
 
-    // Prefer full body from R2 when only a pointer is stored in metadata.
-    if ((!text || text.length < 40) && r2Key) {
+  const needR2 = pending.filter(
+    (p) =>
+      (!opts.kinds?.length || opts.kinds.includes(p.kind)) &&
+      (!p.text || p.text.length < 40) &&
+      p.r2Key
+  );
+  const r2Texts = await Promise.all(
+    needR2.map(async (p) => {
       try {
-        const obj = await env.KB.get(r2Key);
-        if (obj) text = await obj.text();
+        const obj = await env.KB.get(p.r2Key);
+        return obj ? await obj.text() : "";
       } catch {
-        /* ignore missing object */
+        return "";
       }
+    })
+  );
+  const r2ByKey = new Map<string, string>();
+  needR2.forEach((p, i) => {
+    r2ByKey.set(p.r2Key, r2Texts[i] || "");
+  });
+
+  const CONTEXT_BUDGET = 24_000;
+  const PER_CHUNK = 3_000;
+  let used = 0;
+  const chunks: RagChunk[] = [];
+
+  for (const p of pending) {
+    if (opts.kinds?.length && !opts.kinds.includes(p.kind)) continue;
+    let text = p.text;
+    if ((!text || text.length < 40) && p.r2Key) {
+      text = r2ByKey.get(p.r2Key) || text;
     }
-
     if (!text) continue;
-
+    const room = CONTEXT_BUDGET - used;
+    if (room <= 200) break;
+    const sliced = text.slice(0, Math.min(PER_CHUNK, room));
+    used += sliced.length;
     chunks.push({
-      id: m.id,
-      text: text.slice(0, 6000),
-      title: meta.title != null ? String(meta.title) : undefined,
-      source: meta.source != null ? String(meta.source) : undefined,
-      kind,
-      score: m.score,
+      id: p.m.id,
+      text: sliced,
+      title: p.meta.title != null ? String(p.meta.title) : undefined,
+      source: p.meta.source != null ? String(p.meta.source) : undefined,
+      kind: p.kind,
+      score: p.m.score,
     });
   }
 

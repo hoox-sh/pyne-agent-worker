@@ -64,21 +64,39 @@ export async function runAgenticChat(
 ): Promise<AgenticResult> {
   const started = Date.now();
   const tools = createAgentTools(env);
-  const { model, modelId } = resolveChatModel(env, { fallback: false });
-  void modelId;
-  const result = await generateText({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    model: model as any,
-    system: opts.system,
-    messages: opts.messages.map((m) => ({
-      role: m.role as "system" | "user" | "assistant",
-      content: m.content,
-    })),
-    tools,
-    stopWhen: stepCountIs(Math.max(1, Math.min(opts.maxSteps ?? 4, 6))),
-    temperature: opts.temperature,
-    maxOutputTokens: opts.maxTokens,
-  });
+  const run = async (useFallback: boolean) => {
+    const { model, modelId } = resolveChatModel(env, {
+      fallback: useFallback,
+      model: opts.model,
+    });
+    const result = await generateText({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: model as any,
+      system: opts.system,
+      messages: opts.messages.map((m) => ({
+        role: m.role as "system" | "user" | "assistant",
+        content: m.content,
+      })),
+      tools,
+      stopWhen: stepCountIs(Math.max(1, Math.min(opts.maxSteps ?? 4, 6))),
+      temperature: opts.temperature,
+      maxOutputTokens: opts.maxTokens,
+    });
+    return { result, modelId };
+  };
+
+  let packed: Awaited<ReturnType<typeof run>>;
+  try {
+    packed = await run(false);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/timeout|overloaded|capacity|503|429/i.test(msg)) {
+      packed = await run(true);
+    } else {
+      throw e;
+    }
+  }
+  const { result, modelId } = packed;
   const actions: AgenticAction[] = [];
   const calls = (result as { toolCalls?: unknown }).toolCalls;
   const results = (result as { toolResults?: unknown }).toolResults;

@@ -5,7 +5,7 @@
   // "account_id": "YOUR_ACCOUNT_ID",
   "main": "src/index.ts",
   // AI Search namespace binding requires >= 2026-03-27
-  "compatibility_date": "2026-07-30",
+  "compatibility_date": "2026-09-19",
   "compatibility_flags": ["nodejs_compat"],
   "placement": { "mode": "smart" },
   "observability": {
@@ -110,7 +110,7 @@
     "EMBED_MODEL": "@cf/baai/bge-base-en-v1.5",
     "RAG_TOP_K": "8",
     "CORPUS_MAX_SCRIPTS": "1000",
-    "ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081,https://axis.hoox.sh,https://hoox.sh,https://hoox.sh/axis,https://pynescript.ai,https://pynescript-axis.pages.dev",
+    "ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081,http://localhost:5173,http://127.0.0.1:5173,https://axis.hoox.sh,https://hoox.sh,https://pynescript.ai,https://pynescript.online,https://pynescript-axis.pages.dev",
     "VALIDATE_DEFAULT": "true",
     "VALIDATE_MAX_RETRIES": "2",
     // AXIS MCP endpoint for deep app control (run, chart, editor, results…).

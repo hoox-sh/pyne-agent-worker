@@ -3,7 +3,8 @@
 
 import { json } from "../lib/json";
 import { DISCLAIMER_SHORT, MARKS } from "../lib/legal";
-import { chatModel, embedModel } from "../ai/models";
+import { SERVICE_VERSION } from "../lib/version";
+import { chatFallbackModel, chatModel, embedModel } from "../ai/models";
 import { isValidateAvailable } from "../lib/pyne-worker";
 import { isAxisMcpConfigured } from "../axis/mcp-client";
 import { isAnyValidateAvailable } from "../rag/validate-loop";
@@ -54,7 +55,7 @@ export async function handleHealth(env: Env): Promise<Response> {
       ok: healthy,
       mode,
       service: env.SERVICE_NAME || "pyne-agent-worker",
-      version: env.SERVICE_VERSION || "0.2.0",
+      version: env.SERVICE_VERSION || SERVICE_VERSION,
       checks,
       surfaces: {
         rest_chat: "POST /v1/chat",
@@ -64,7 +65,7 @@ export async function handleHealth(env: Env): Promise<Response> {
       },
       models: {
         chat: chatModel(env),
-        fallback: (env.CHAT_MODEL_FALLBACK || "").trim() || null,
+        fallback: chatFallbackModel(env),
         embed: embedModel(env),
         ai_gateway: (env.AI_GATEWAY_ID || "").trim() || null,
       },

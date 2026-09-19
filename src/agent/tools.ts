@@ -5,7 +5,6 @@ import { tool } from "ai";
 import { z } from "zod";
 import { searchKnowledge } from "./knowledge";
 import { formatLintForModel, lintPine } from "./lint";
-import { cacheGet, cacheSet } from "./gateway";
 import {
   axisApp,
   axisMcpCallTool,
@@ -49,16 +48,10 @@ export function createAgentTools(env: Env) {
         top_k: z.number().int().min(1).max(12).optional().describe("Max chunks (default 6)"),
       }),
       execute: async ({ query, top_k }) => {
-        const key = `rag:${top_k ?? 6}:${query.trim().toLowerCase()}`;
-        const cached = cacheGet(key);
-        if (cached) {
-          return { ok: true, cached: true, backend: "cache", text: cached };
-        }
         const result = await searchKnowledge(env, query, top_k ?? 6);
-        cacheSet(key, result.formatted);
         return {
           ok: true,
-          cached: false,
+          cached: Boolean(result.cached),
           backend: result.backend,
           hit_count: result.hits.length,
           text: result.formatted,

@@ -8,6 +8,7 @@ import {
   personaSystemSection,
   type PersonaId,
 } from "../agent/personas";
+import { buildPineHardRules } from "../agent/pine-rules";
 import type { RagChunk } from "./retrieve";
 
 /**
@@ -35,7 +36,6 @@ export function buildSystemPrompt(opts?: {
     `## Goals`,
     `- Produce correct, idiomatic ${MARKS.pine} (prefer v6 when version is auto; support v5 when asked).`,
     `- Prefer PYNE/AXIS-friendly scripts (clear plots, inputs, enums, force_overlay, no proprietary TV-only APIs when avoidable).`,
-    `- Default v6: no when=, no transp=, bool never na, request.security (not security), dynamic requests ok.`,
     `- When writing a script, explain briefly, then deliver one complete fenced \`\`\`pine block.`,
     `- When the user asks to edit, return the full updated script (not a partial patch) unless they request a diff.`,
     ``,
@@ -46,6 +46,8 @@ export function buildSystemPrompt(opts?: {
     `- If knowledge is insufficient, say so and write the best safe approximation with comments.`,
     `- Target version preference: ${ver}. Script kind preference: ${style}.`,
     `- Prefer code that parses and evaluates cleanly on PYNE/AXIS. (Optional: operator may validate via pyne-worker; not required.)`,
+    ``,
+    buildPineHardRules(ver),
     ``,
     // Persona stance (pine coder / AXIS operator / trader). The REST path has
     // no function tools — the AXIS sections document the MCP surfaces the
@@ -139,10 +141,28 @@ export function wantsPineScript(userText: string): boolean {
   return !howTo;
 }
 
-/** Extract first fenced pine / pinescript / code block if present. */
+function looksLikePineSource(src: string): boolean {
+  return (
+    /\/\/\s*@version\s*=\s*[56]\b/i.test(src) ||
+    /\b(indicator|strategy|library)\s*\(/.test(src)
+  );
+}
+
+/**
+ * Extract the first fenced Pine Script™ block.
+ * Language `pine` / `pinescript` / `pyne` wins; an untagged fence is used only
+ * when the body looks like Pine. ```js / ```ts / etc. are never treated as Pine.
+ */
 export function extractPineBlock(text: string): string | null {
-  const re =
-    /```(?:pine|pinescript|pine-script)?\s*\n([\s\S]*?)```/i;
-  const m = text.match(re);
-  return m?.[1]?.trim() ? m[1].trim() : null;
+  const re = /```([^\n`]*)\n([\s\S]*?)```/g;
+  let m: RegExpExecArray | null;
+  let untagged: string | null = null;
+  while ((m = re.exec(text)) !== null) {
+    const lang = String(m[1] || "").trim().split(/\s+/)[0] || "";
+    const body = (m[2] || "").trim();
+    if (!body) continue;
+    if (/^(pine|pinescript|pine-script|pyne)$/i.test(lang)) return body;
+    if (!lang && looksLikePineSource(body) && !untagged) untagged = body;
+  }
+  return untagged;
 }

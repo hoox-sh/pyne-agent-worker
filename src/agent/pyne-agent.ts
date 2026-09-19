@@ -112,7 +112,19 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
         tools,
         // Allow tool → model → tool loops: search + lint + AXIS run/fix cycles
         stopWhen: stepCountIs(8),
+        maxRetries: 1,
         abortSignal: options?.abortSignal,
+        onError: ({ error }) => {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.error(
+            JSON.stringify({
+              type: "pyne_agent_stream_error",
+              modelId,
+              error: msg,
+              instance: this.name,
+            })
+          );
+        },
         onFinish: async (event) => {
           // Attach model id for observability (Workers logs)
           console.log(

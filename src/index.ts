@@ -17,6 +17,7 @@ import { requireAuth } from "./lib/auth";
 import { pluginCorsHeaders, withCors } from "./lib/cors";
 import { errorJson, json } from "./lib/json";
 import { DISCLAIMER_SHORT } from "./lib/legal";
+import { SERVICE_VERSION } from "./lib/version";
 import { handleChat } from "./routes/chat";
 import { handleHealth } from "./routes/health";
 import { handleSearch } from "./routes/search";
@@ -101,9 +102,9 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
 
   // Agents SDK routing: /agents/pyne-agent/:sessionId (WebSocket + HTTP)
   if (path.startsWith("/agents/")) {
-    // Optional auth gate for agent sessions when API_KEY is configured
-    if (env.API_KEY && request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
-      const auth = requireAuth(request, env);
+    if (env.API_KEY) {
+      const isWs = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
+      const auth = requireAuth(request, env, { allowQuery: isWs });
       if (!auth.ok) return errorJson(auth.status, auth.error);
     }
     const agentRes = await routeAgentRequest(request, env);
@@ -127,7 +128,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     }
     return json({
       service: env.SERVICE_NAME || "pyne-agent-worker",
-      version: env.SERVICE_VERSION || "0.2.0",
+      version: env.SERVICE_VERSION || SERVICE_VERSION,
       description:
         "Natural-language Pine Script™ agent (Cloudflare® Agents SDK + Workers AI™ + RAG). AXIS sister plugin.",
       endpoints: {
@@ -217,7 +218,18 @@ export default {
       return withCors(request, env, res);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      return withCors(request, env, errorJson(500, msg));
+      console.error(
+        JSON.stringify({
+          type: "unhandled_fetch",
+          error: msg,
+          path: new URL(request.url).pathname,
+        })
+      );
+      return withCors(
+        request,
+        env,
+        errorJson(500, "Internal server error")
+      );
     }
   },
 };

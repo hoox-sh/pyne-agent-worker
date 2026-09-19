@@ -115,12 +115,10 @@ function appendValidationNote(
   // But a *misconfigured* backend (present yet incapable) must surface once,
   // or the operator never learns why nothing validates.
   if (validation.skipped) {
-    if (
-      validation.reason &&
-      /NO_BACKEND|no evaluation backend/i.test(validation.reason) &&
-      !text.includes("NO_BACKEND")
-    ) {
-      return `${text.trim()}\n\n_Note: ${validation.reason}_`;
+    const reason = validation.reason || "";
+    const quiet = /not configured/i.test(reason);
+    if (!quiet && reason && !text.includes(reason.slice(0, 48))) {
+      return `${text.trim()}\n\n_Note: ${reason}_`;
     }
     return text;
   }
@@ -215,10 +213,11 @@ export async function generateValidateRetry(
       validation,
     });
 
-    // Success paths
+    // Success / non-retryable (infra, auth, timeout, skipped backend)
     if (!wantValidate) break;
     if (validation?.ok) break;
     if (validation?.skipped) break;
+    if (validation?.retryable === false) break;
 
     // Prepare retry
     if (i < maxAttempts - 1) {

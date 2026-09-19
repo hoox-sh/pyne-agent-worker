@@ -3,6 +3,8 @@
 
 import { retrieve, type RagChunk } from "../rag/retrieve";
 import { formatRagContext } from "../rag/prompts";
+import { ragTopK } from "../ai/models";
+import { cacheGet, cacheSet } from "./gateway";
 
 export type KnowledgeHit = {
   id: string;
@@ -23,11 +25,42 @@ export async function searchKnowledge(
   env: Env,
   query: string,
   topK = 6
-): Promise<{ hits: KnowledgeHit[]; backend: KnowledgeHit["backend"]; formatted: string }> {
+): Promise<{
+  hits: KnowledgeHit[];
+  backend: KnowledgeHit["backend"];
+  formatted: string;
+  cached?: boolean;
+}> {
   const q = String(query || "").trim();
   if (!q) {
     return { hits: [], backend: "none", formatted: "Empty query." };
   }
+
+  const k = ragTopK(env, topK);
+  const cacheKey = `rag:${k}:${q.toLowerCase()}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached) as {
+        hits: KnowledgeHit[];
+        backend: KnowledgeHit["backend"];
+        formatted: string;
+      };
+      return { ...parsed, cached: true };
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const pack = (hits: KnowledgeHit[], backend: KnowledgeHit["backend"], formatted: string) => {
+    const payload = { hits, backend, formatted };
+    try {
+      cacheSet(cacheKey, JSON.stringify(payload));
+    } catch {
+      /* isolate cache is best-effort */
+    }
+    return payload;
+  };
 
   // 1) AI Search managed hybrid retrieval
   if (env.AI_SEARCH) {
@@ -36,7 +69,7 @@ export async function searchKnowledge(
       // Binding shape follows Cloudflare AI Search Workers API.
       const res = await instance.search({
         messages: [{ role: "user", content: q }],
-        max_num_results: topK,
+        max_num_results: k,
       });
       const hits: KnowledgeHit[] = [];
       const data = (res as { data?: unknown[]; results?: unknown[] }).data
@@ -68,20 +101,19 @@ export async function searchKnowledge(
         });
       }
       if (hits.length) {
-        return {
-          hits,
-          backend: "ai-search",
-          formatted: formatHits(hits),
-        };
+        return pack(hits, "ai-search", formatHits(hits));
       }
-    } catch {
-      // Fall through to Vectorize
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(
+        JSON.stringify({ type: "ai_search_failed", error: msg })
+      );
     }
   }
 
   // 2) Vectorize + R2 (operator-ingested KB)
   try {
-    const chunks: RagChunk[] = await retrieve(env, { query: q, topK });
+    const chunks: RagChunk[] = await retrieve(env, { query: q, topK: k });
     const hits: KnowledgeHit[] = chunks.map((c) => ({
       id: c.id,
       title: c.title,
@@ -90,15 +122,16 @@ export async function searchKnowledge(
       score: c.score,
       backend: "vectorize" as const,
     }));
-    return {
+    return pack(
       hits,
-      backend: hits.length ? "vectorize" : "none",
-      formatted: hits.length
+      hits.length ? "vectorize" : "none",
+      hits.length
         ? formatRagContext(chunks)
-        : "No knowledge-base hits (AI Search + Vectorize empty). Be conservative.",
-    };
+        : "No knowledge-base hits (AI Search + Vectorize empty). Be conservative."
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.warn(JSON.stringify({ type: "vectorize_failed", error: msg }));
     return {
       hits: [],
       backend: "none",

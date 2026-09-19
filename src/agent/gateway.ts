@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { createWorkersAI } from "workers-ai-provider";
-import { chatModel } from "../ai/models";
+import { chatFallbackModel, resolveRequestedModel } from "../ai/models";
 
 /**
  * Resolve a Workers AI language model for the AI SDK.
@@ -14,7 +14,7 @@ import { chatModel } from "../ai/models";
  */
 export function resolveChatModel(
   env: Env,
-  opts?: { fallback?: boolean }
+  opts?: { fallback?: boolean; model?: string }
 ): {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   model: any;
@@ -22,10 +22,8 @@ export function resolveChatModel(
   viaGateway: boolean;
 } {
   const workersai = createWorkersAI({ binding: env.AI });
-  const primary = chatModel(env);
-  const fallbackId =
-    (env.CHAT_MODEL_FALLBACK || "").trim() ||
-    "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+  const primary = resolveRequestedModel(env, opts?.model);
+  const fallbackId = chatFallbackModel(env);
   const modelId = opts?.fallback ? fallbackId : primary;
   const viaGateway = Boolean((env.AI_GATEWAY_ID || "").trim());
 

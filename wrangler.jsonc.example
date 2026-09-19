@@ -2,9 +2,19 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pyne-agent-worker",
   "main": "src/index.ts",
-  "compatibility_date": "2026-07-24",
+  "compatibility_date": "2026-09-19",
   "compatibility_flags": ["nodejs_compat"],
+  "placement": { "mode": "smart" },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": true },
+    "traces": { "enabled": true }
+  },
   "ai": { "binding": "AI" },
+  // Optional managed hybrid RAG. Comment out if unused — Vectorize is the fallback.
+  "ai_search_namespaces": [
+    { "binding": "AI_SEARCH", "namespace": "default", "remote": true }
+  ],
   "vectorize": [
     { "binding": "VECTORIZE", "index_name": "pyne-agent-kb" }
   ],
@@ -22,28 +32,51 @@
       "database_id": "REPLACE_WITH_D1_ID"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "PyneAgent", "class_name": "PyneAgent" },
+      { "name": "PyneMcp", "class_name": "PyneMcp" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1-agents-sdk", "new_sqlite_classes": ["PyneAgent", "PyneMcp"] }
+  ],
   "assets": {
     "directory": "./public",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/plugin/*",
+      "/plugins/*",
+      "/health",
+      "/v1/*",
+      "/agents/*",
+      "/mcp",
+      "/mcp/*"
+    ]
   },
 
   // --- Optional HOOX mesh only ---
   // Uncomment ONLY if pyne-worker is deployed in the same account.
-  // The agent is fully usable without this (standalone NL → PYNE scripts).
   // "services": [
   //   { "binding": "PYNE_SERVICE", "service": "pyne-worker" }
   // ],
 
   "vars": {
     "SERVICE_NAME": "pyne-agent-worker",
-    "SERVICE_VERSION": "0.2.0",
+    "SERVICE_VERSION": "0.3.0",
     "CHAT_MODEL": "@cf/qwen/qwen2.5-coder-32b-instruct",
+    "CHAT_MODEL_FALLBACK": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "EMBED_MODEL": "@cf/baai/bge-base-en-v1.5",
     "RAG_TOP_K": "8",
     "CORPUS_MAX_SCRIPTS": "1000",
-    "ALLOWED_ORIGINS": "http://localhost:8081,https://hoox.sh,https://hoox.sh/axis",
-    // "PYNE_WORKER_URL": "https://pyne-worker.example.workers.dev",
+    "ALLOWED_ORIGINS": "http://localhost:8081,http://localhost:5173,https://hoox.sh,https://axis.hoox.sh",
     "VALIDATE_DEFAULT": "true",
     "VALIDATE_MAX_RETRIES": "2"
+    // Production HOOX default (optional for standalone):
+    // "AXIS_MCP_URL": "https://worker.axis.hoox.sh/mcp"
+    // "PYNE_WORKER_URL": "https://pyne-worker.example.workers.dev"
   }
+
+  // Secrets (wrangler secret put):
+  //   API_KEY, AXIS_MCP_KEY, PYNE_WORKER_API_KEY
 }

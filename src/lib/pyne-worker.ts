@@ -27,6 +27,8 @@ export type ValidateResult = {
   mode?: string;
   bars?: number;
   latency_ms: number;
+  /** When false, the generate→validate loop must not retry (infra / auth / timeout). */
+  retryable?: boolean;
   /** Raw subset for debugging (no full plots) */
   raw?: Record<string, unknown>;
 };
@@ -47,6 +49,14 @@ export function isValidateAvailable(env: Env): boolean {
   return workerConfigured(env);
 }
 
+const DEFAULT_VALIDATE_TIMEOUT_MS = 20_000;
+
+function validateTimeoutMs(env: Env): number {
+  const n = Number(env.PYNE_VALIDATE_TIMEOUT_MS || DEFAULT_VALIDATE_TIMEOUT_MS);
+  if (!Number.isFinite(n) || n < 1_000) return DEFAULT_VALIDATE_TIMEOUT_MS;
+  return Math.min(Math.floor(n), 60_000);
+}
+
 async function postRun(
   env: Env,
   body: Record<string, unknown>
@@ -59,20 +69,19 @@ async function postRun(
     headers["X-API-Key"] = key;
   }
 
+  const init: RequestInit = {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(validateTimeoutMs(env)),
+  };
+
   let res: Response;
   if (env.PYNE_SERVICE) {
-    res = await env.PYNE_SERVICE.fetch("https://pyne-worker/run", {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
+    res = await env.PYNE_SERVICE.fetch("https://pyne-worker/run", init);
   } else {
     const base = (env.PYNE_WORKER_URL || "").replace(/\/$/, "");
-    res = await fetch(`${base}/run`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
+    res = await fetch(`${base}/run`, init);
   }
 
   let data: Record<string, unknown> = {};
@@ -142,13 +151,24 @@ export async function validateOnPyneWorker(
       };
     }
 
+    const errorKind =
+      data.error_kind != null ? String(data.error_kind) : undefined;
+    const errorType =
+      data.error_type != null ? String(data.error_type) : undefined;
+    const scriptError = Boolean(errorKind || errorType || data.error_bar != null);
+    const infra =
+      (status === 401 || status === 403 || status >= 500) && !scriptError;
+
     return {
       ok: false,
       backend: "pyne-worker",
+      skipped: infra,
+      retryable: infra ? false : undefined,
       status,
       error: String(data.error || `pyne-worker HTTP ${status}`),
-      error_kind: data.error_kind != null ? String(data.error_kind) : undefined,
-      error_type: data.error_type != null ? String(data.error_type) : undefined,
+      reason: infra ? `pyne-worker HTTP ${status} (not a script error)` : undefined,
+      error_kind: errorKind,
+      error_type: errorType,
       error_bar:
         typeof data.error_bar === "number" ? data.error_bar : undefined,
       mode,
@@ -160,10 +180,17 @@ export async function validateOnPyneWorker(
       },
     };
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const timeout = /abort|timeout/i.test(msg);
     return {
       ok: false,
+      skipped: true,
+      retryable: false,
       backend: "pyne-worker",
-      error: e instanceof Error ? e.message : String(e),
+      error: msg,
+      reason: timeout
+        ? `pyne-worker timeout after ${validateTimeoutMs(env)}ms`
+        : `pyne-worker transport: ${msg}`,
       latency_ms: Date.now() - started,
     };
   }

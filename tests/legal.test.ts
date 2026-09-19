@@ -57,6 +57,22 @@ describe("prompts", () => {
     expect(extractPineBlock(text)).toContain("//@version=6");
   });
 
+  test("extractPineBlock ignores non-pine fences", () => {
+    const js = "how-to\n```js\nconsole.log('hi')\n```\n";
+    expect(extractPineBlock(js)).toBeNull();
+  });
+
+  test("extractPineBlock accepts untagged fence that looks like Pine", () => {
+    const text = "ok\n```\n//@version=6\nindicator('x')\nplot(close)\n```\n";
+    expect(extractPineBlock(text)).toContain("indicator('x')");
+  });
+
+  test("extractPineBlock prefers labeled pine over earlier js", () => {
+    const text =
+      "```js\nfoo()\n```\n```pine\n//@version=6\nindicator('x')\n```";
+    expect(extractPineBlock(text)).toContain("indicator('x')");
+  });
+
   test("formatRagContext empty", () => {
     expect(formatRagContext([])).toContain("Pine Script™");
   });
