@@ -23,10 +23,11 @@ Module path in this repo: `plugin/axis-pine-agent.js` (also served from `public/
 
 | Field | Required | Notes |
 |-------|----------|--------|
-| `endpoint` | yes | Worker origin |
+| `endpoint` | yes | Worker origin (`http` or `https`) |
 | `apiKey` | if worker has `API_KEY` | |
 | `pineVersion` | no | `auto` / `v5` / `v6` |
 | `style` | no | indicator / strategy / library |
+| `persona` | no | `auto` / `pine` / `axis` / `trader` |
 
 ## Standalone
 
