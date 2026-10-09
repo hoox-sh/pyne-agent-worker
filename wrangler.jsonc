@@ -59,19 +59,14 @@
 
   // Live tenant verify cache: KV key hx:{sha256hex[:16]} →
   // {tid, plan, scopes, limits, exp} (positive 60s TTL, negative 10s).
-  // Code runs without the binding (verify.ts skips L2 when unbound), so this
-  // stays comments-only until needed — a placeholder KV id breaks deploy.
-  // OPERATOR: create the namespace when ready, then uncomment and fill ids
-  // (same namespace for preview is fine for dev):
-  //   wrangler kv namespace create TENANT_KEYS
-  //   wrangler kv namespace create TENANT_KEYS --preview
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "TENANT_KEYS",
-  //     "id": "<kv-id>",
-  //     "preview_id": "<preview-kv-id>"
-  //   }
-  // ],
+  // Code runs without the binding (verify.ts skips L2 when unbound).
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_KEYS",
+      "id": "04192692aef74d288637b496be2068c8",
+      "preview_id": "f65f77f209604188a536ae1ef5834844"
+    }
+  ],
 
   // Optional D1 for legacy REST chat session history
   "d1_databases": [
