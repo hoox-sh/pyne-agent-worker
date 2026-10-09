@@ -54,8 +54,16 @@ interface Env {
   PYNE_WORKER_URL?: string;
   /** AXIS MCP endpoint for deep app control, e.g. https://worker.axis.hoox.sh/mcp */
   AXIS_MCP_URL?: string;
-  /** SaaS console base URL for the future tenant verify / usage path. */
+  /** SaaS console base URL for the tenant verify / usage path. */
   CONSOLE_URL?: string;
+  /** KV cache for live tenant verify (key hash → plan/scopes/limits, 60s TTL). */
+  TENANT_KEYS?: KVNamespace;
+  /**
+   * Self-host fail-open opt-in: when set equal to API_KEY, console outages
+   * degrade (X-Hoox-Verify: degraded) instead of 503. Never for tenant keys
+   * unless the operator explicitly opted in.
+   */
+  HX_ALLOW_SELFHOST?: string;
   /** Bearer for the AXIS MCP endpoint (falls back to API_KEY). Set via secret. */
   AXIS_MCP_KEY?: string;
   /** Default true — run generate→validate→retry when pyne-worker is configured. */

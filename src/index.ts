@@ -13,7 +13,7 @@
  */
 
 import { routeAgentRequest } from "agents";
-import { requireAuth } from "./lib/auth";
+import { authorizeRequest, requireAuth, scopeForPath } from "./lib/auth";
 import { pluginCorsHeaders, withCors } from "./lib/cors";
 import { errorJson, json } from "./lib/json";
 import { DISCLAIMER_SHORT } from "./lib/legal";
@@ -145,27 +145,53 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     });
   }
 
-  // Auth gate for legacy REST API
-  const auth = requireAuth(request, env);
-  if (!auth.ok) return errorJson(auth.status, auth.error);
+  // Auth gate for legacy REST API (tenant hx_live_… keys verify live
+  // against console; legacy single-key + open paths unchanged).
+  const auth = await authorizeRequest(request, env, { scope: scopeForPath(path) });
+  if (!auth.ok) {
+    if (auth.status === 429) {
+      const limited = errorJson(429, auth.error, {
+        code: auth.code ?? "RATE_LIMITED",
+      });
+      if (auth.retryAfter !== undefined) {
+        limited.headers.set("Retry-After", String(auth.retryAfter));
+      }
+      return limited;
+    }
+    if (auth.status === 402) {
+      return errorJson(402, auth.error, {
+        code: "ENTITLEMENT_REQUIRED",
+        upgrade: auth.upgrade ?? "https://console.hoox.sh/billing",
+        scope: scopeForPath(path),
+      });
+    }
+    if (auth.code) return errorJson(auth.status, auth.error, { code: auth.code });
+    return errorJson(auth.status, auth.error);
+  }
+  // Self-host fail-open marker (operator opt-in only): signal degraded verify.
+  const verifyHeader = auth.degraded ? { "X-Hoox-Verify": "degraded" } : null;
+  const withVerify = (res: Response): Response => {
+    if (verifyHeader) res.headers.set("X-Hoox-Verify", "degraded");
+    return res;
+  };
 
   if (path === "/v1/chat" && request.method === "POST") {
-    return handleChat(request, env);
+    return withVerify(await handleChat(request, env));
   }
 
   if (
     (path === "/v1/search" || path === "/v1/kb/search") &&
     (request.method === "GET" || request.method === "POST")
   ) {
-    return handleSearch(request, env);
+    return withVerify(await handleSearch(request, env));
   }
 
   if (path === "/v1/admin/embed" && request.method === "POST") {
-    return handleAdminEmbed(request, env);
+    return withVerify(await handleAdminEmbed(request, env));
   }
 
   if (path === "/v1/admin/index" && request.method === "POST") {
-    return handleAdminIndex(request, env);
+    return withVerify(await handleAdminIndex(request, env));
   }
 
   if (path === "/v1/sessions" && request.method === "POST") {
@@ -174,7 +200,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
         title?: string;
       };
       const s = await createSession(env, body.title);
-      return json({ ok: true, session: s });
+      return withVerify(json({ ok: true, session: s }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return errorJson(503, `D1 sessions unavailable: ${msg}`);
@@ -188,7 +214,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
       const s = await getSession(env, sid);
       if (!s) return errorJson(404, "session not found");
       const messages = await listMessages(env, sid);
-      return json({ ok: true, session: s, messages });
+      return withVerify(json({ ok: true, session: s, messages }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return errorJson(503, `D1 sessions unavailable: ${msg}`);

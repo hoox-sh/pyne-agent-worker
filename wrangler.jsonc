@@ -57,6 +57,20 @@
     }
   ],
 
+  // Live tenant verify cache: KV key hx:{sha256hex[:16]} →
+  // {tid, plan, scopes, limits, exp} (positive 60s TTL, negative 10s).
+  // OPERATOR: create the namespace, then replace the placeholder ids below
+  // with the real ones (same namespace for preview is fine for dev):
+  //   wrangler kv namespace create TENANT_KEYS
+  //   wrangler kv namespace create TENANT_KEYS --preview
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_KEYS",
+      "id": "placeholder-change-me",
+      "preview_id": "preview-change-me"
+    }
+  ],
+
   // Optional D1 for legacy REST chat session history
   "d1_databases": [
     {
@@ -116,12 +130,11 @@
     // AXIS MCP endpoint for deep app control (run, chart, editor, results…).
     // Production default; point at local AXIS Worker when developing.
     "AXIS_MCP_URL": "https://worker.axis.hoox.sh/mcp",
-    // SaaS console base URL for the future tenant verify / usage path
-    // (Phase 2 thin slice: Bearer hx_live_… is passthrough only, no remote
-    // fetch yet, so this var is currently informational).
-    // Future quota enforcement will add a TENANT_KEYS KV binding here for the
-    // verify cache (key hash → plan/scopes/limits, 60s TTL). Do NOT add the
-    // binding until the verify path lands — a missing KV id breaks deploy.
+    // SaaS console base URL for live tenant verify (`GET /api/v1/verify`,
+    // hash on wire) + future usage reporting. Tenant `hx_live_…` keys are
+    // verified per route scope (`agent:chat`); failures are 401 INVALID_KEY /
+    // 402 ENTITLEMENT_REQUIRED / 429 RATE_LIMITED. Self-host fail-open needs
+    // the `HX_ALLOW_SELFHOST` secret set equal to `API_KEY` (else 503).
     "CONSOLE_URL": "https://console.hoox.sh"
     // Optional AI Gateway id (observability / caching attribution):
     // "AI_GATEWAY_ID": "pyne-agent-gateway"
@@ -131,4 +144,6 @@
   //   API_KEY — shared secret for HTTP auth (X-API-Key / Authorization: Bearer)
   //   AXIS_MCP_KEY — Bearer for the AXIS MCP endpoint (falls back to API_KEY)
   //   PYNE_WORKER_API_KEY — optional; only for HTTP pyne-worker validate loop
+  //   HX_ALLOW_SELFHOST — optional fail-open: set equal to API_KEY so console
+  //     verify outages degrade (X-Hoox-Verify: degraded) instead of 503
 }
