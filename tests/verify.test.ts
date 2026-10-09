@@ -158,6 +158,62 @@ describe("verifyTenant", () => {
     expect(n).toBe(1);
   });
 
+  test("unavailable negative cache: transport outage fetches once (2nd skips fetch)", async () => {
+    let n = 0;
+    const t = mockEnv(async () => {
+      n++;
+      throw new Error("boom");
+    });
+    const raw = "hx_live_outageneg001";
+    const a = await verifyTenant(t.env, raw, "agent:chat", { fetchFn: t.via });
+    const b = await verifyTenant(t.env, raw, "agent:chat", { fetchFn: t.via });
+    expect(a.ok).toBe(false);
+    expect(b.ok).toBe(false);
+    if (!a.ok) {
+      expect(a.code).toBe("VERIFY_UNAVAILABLE");
+      expect(a.status).toBe(503);
+    }
+    if (!b.ok) {
+      expect(b.code).toBe("VERIFY_UNAVAILABLE");
+      expect(b.status).toBe(503);
+    }
+    expect(n).toBe(1);
+    expect(t.calls).toHaveLength(1);
+  });
+
+  test("unavailable negative cache: console 500 fetches once", async () => {
+    let n = 0;
+    const t = mockEnv(async () => {
+      n++;
+      return new Response(JSON.stringify({ error: "oops" }), { status: 500 });
+    });
+    const raw = "hx_live_outageneg500";
+    const a = await verifyTenant(t.env, raw, "agent:chat", { fetchFn: t.via });
+    const b = await verifyTenant(t.env, raw, "agent:chat", { fetchFn: t.via });
+    expect(a.ok).toBe(false);
+    expect(b.ok).toBe(false);
+    if (!b.ok) {
+      expect(b.code).toBe("VERIFY_UNAVAILABLE");
+      expect(b.status).toBe(503);
+    }
+    expect(n).toBe(1);
+  });
+
+  test("unavailable negative cache: bad JSON fetches once", async () => {
+    let n = 0;
+    const t = mockEnv(async () => {
+      n++;
+      return new Response("not-json{{{", { status: 200 });
+    });
+    const raw = "hx_live_outagenegjson";
+    const a = await verifyTenant(t.env, raw, "agent:chat", { fetchFn: t.via });
+    const b = await verifyTenant(t.env, raw, "agent:chat", { fetchFn: t.via });
+    expect(a.ok).toBe(false);
+    expect(b.ok).toBe(false);
+    if (!b.ok) expect(b.code).toBe("VERIFY_UNAVAILABLE");
+    expect(n).toBe(1);
+  });
+
   test("client-side scope check rejects even when console says 200", async () => {
     const t = mockEnv(async () =>
       okJson({ valid: true, tid: "t_1", plan: "free", scopes: ["trade"], limits: null })
@@ -288,6 +344,79 @@ describe("authorizeRequest", () => {
     if (!res.ok) {
       expect(res.status).toBe(503);
       expect(res.code).toBe("VERIFY_UNAVAILABLE");
+    }
+  });
+
+  test("MCP gate: forged hx_live_… with console 401 → 401 INVALID_KEY", async () => {
+    // Regression: /mcp + /agents/* used the sync requireAuth passthrough,
+    // which accepted ANY hx_live_… shape without live verify. Both gates now
+    // run the same async authorizeRequest(scope agent:chat) as REST.
+    const t = mockEnv(async () => {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+      });
+    });
+    const req = new Request("https://x/mcp", {
+      method: "POST",
+      headers: { Authorization: "Bearer hx_live_fake" },
+    });
+    const res = await authorizeRequest(req, t.env, {
+      scope: "agent:chat",
+      fetchFn: t.via,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.status).toBe(401);
+      expect(res.code).toBe("INVALID_KEY");
+    }
+    expect(t.calls).toHaveLength(1);
+  });
+
+  test("agents WS gate: ?api_key= query key verifies live (valid → ok)", async () => {
+    const t = mockEnv(async () =>
+      okJson({ valid: true, tid: "t_ws", plan: "pro", scopes: ["agent:chat"], limits: null })
+    );
+    const req = new Request(
+      "https://x/agents/pyne-agent/sess123?api_key=hx_live_wsquery001",
+      { headers: { Upgrade: "websocket" } }
+    );
+    const res = await authorizeRequest(req, t.env, {
+      scope: "agent:chat",
+      allowQuery: true,
+      fetchFn: t.via,
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.tenantPassthrough).toBe(true);
+      expect(res.tenant?.tid).toBe("t_ws");
+    }
+    expect(t.calls).toHaveLength(1);
+    // Hash on wire even for query-provided keys — never the raw key.
+    const auth = (t.calls[0]?.init?.headers as Record<string, string>)
+      ?.Authorization;
+    expect(auth).toMatch(/^Bearer [0-9a-f]{64}$/);
+    expect(auth).not.toContain("hx_live_");
+  });
+
+  test("agents WS gate: forged ?api_key= query key → 401", async () => {
+    const t = mockEnv(async () => {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+      });
+    });
+    const req = new Request(
+      "https://x/agents/pyne-agent/sess123?api_key=hx_live_wsfake002",
+      { headers: { Upgrade: "websocket" } }
+    );
+    const res = await authorizeRequest(req, t.env, {
+      scope: "agent:chat",
+      allowQuery: true,
+      fetchFn: t.via,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.status).toBe(401);
+      expect(res.code).toBe("INVALID_KEY");
     }
   });
 });

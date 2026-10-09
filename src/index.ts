@@ -13,7 +13,7 @@
  */
 
 import { routeAgentRequest } from "agents";
-import { authorizeRequest, requireAuth, scopeForPath } from "./lib/auth";
+import { authorizeRequest, scopeForPath, type AuthResult } from "./lib/auth";
 import { pluginCorsHeaders, withCors } from "./lib/cors";
 import { errorJson, json } from "./lib/json";
 import { DISCLAIMER_SHORT } from "./lib/legal";
@@ -35,6 +35,36 @@ export { PyneAgent, PyneMcp };
 
 function notFound(): Response {
   return errorJson(404, "Not found");
+}
+
+/**
+ * Map an async auth failure to the same error shape as the REST gate below
+ * (401 INVALID_KEY / 402 ENTITLEMENT_REQUIRED / 429 RATE_LIMITED /
+ * 503 VERIFY_UNAVAILABLE). Used by the MCP + Agents gates so forged
+ * `hx_live_…` keys cannot bypass live verify. Raw keys are never logged.
+ */
+function authFailureResponse(
+  auth: Extract<AuthResult, { ok: false }>,
+  path: string
+): Response {
+  if (auth.status === 429) {
+    const limited = errorJson(429, auth.error, {
+      code: auth.code ?? "RATE_LIMITED",
+    });
+    if (auth.retryAfter !== undefined) {
+      limited.headers.set("Retry-After", String(auth.retryAfter));
+    }
+    return limited;
+  }
+  if (auth.status === 402) {
+    return errorJson(402, auth.error, {
+      code: "ENTITLEMENT_REQUIRED",
+      upgrade: auth.upgrade ?? "https://console.hoox.sh/billing",
+      scope: scopeForPath(path),
+    });
+  }
+  if (auth.code) return errorJson(auth.status, auth.error, { code: auth.code });
+  return errorJson(auth.status, auth.error);
 }
 
 function isPluginPath(path: string): boolean {
@@ -91,22 +121,27 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     return new Response(null, { status: 204 });
   }
 
-  // MCP streamable HTTP (optional auth when API_KEY set)
+  // MCP streamable HTTP — same async tenant-verify gate as REST
+  // (scope agent:chat). Legacy single-key + open behavior unchanged
+  // (non-tenant keys fall through to the sync legacy check inside
+  // authorizeRequest).
   if (path === "/mcp" || path.startsWith("/mcp/")) {
-    if (env.API_KEY) {
-      const auth = requireAuth(request, env);
-      if (!auth.ok) return errorJson(auth.status, auth.error);
-    }
+    const auth = await authorizeRequest(request, env, { scope: "agent:chat" });
+    if (!auth.ok) return authFailureResponse(auth, path);
     return PyneMcp.serve("/mcp", { binding: "PyneMcp" }).fetch(request, env, ctx);
   }
 
-  // Agents SDK routing: /agents/pyne-agent/:sessionId (WebSocket + HTTP)
+  // Agents SDK routing: /agents/pyne-agent/:sessionId (WebSocket + HTTP).
+  // Same async gate; WebSocket upgrades keep ?api_key= query-key support
+  // (browsers cannot set Authorization on WS handshakes) — query keys are
+  // classified and live-verified exactly like header keys.
   if (path.startsWith("/agents/")) {
-    if (env.API_KEY) {
-      const isWs = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
-      const auth = requireAuth(request, env, { allowQuery: isWs });
-      if (!auth.ok) return errorJson(auth.status, auth.error);
-    }
+    const isWs = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
+    const auth = await authorizeRequest(request, env, {
+      scope: "agent:chat",
+      allowQuery: isWs,
+    });
+    if (!auth.ok) return authFailureResponse(auth, path);
     const agentRes = await routeAgentRequest(request, env);
     if (agentRes) return agentRes;
     return errorJson(404, "Agent route not found");

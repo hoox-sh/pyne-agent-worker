@@ -15,6 +15,11 @@
  * - Scope is enforced client-side too (console may ignore `?scope=`).
  * - No metering / usage flush here (next task). No change to chat/RAG/validate.
  * - Raw keys are never logged — hash prefix (`sha256[:8]`) only.
+ * - Console outages (transport error / non-200 / bad JSON) are
+ *   negative-cached in L1 for 10s (per key-hash + scope) so one outage does
+ *   not hammer the console (or logs) on every request. Degraded self-host
+ *   fail-open (`HX_ALLOW_SELFHOST` == `API_KEY`) is re-evaluated on every
+ *   call, including negative-cache hits.
  */
 
 export const VERIFY_POSITIVE_TTL_S = 60;
@@ -62,6 +67,8 @@ export type VerifyCacheEntry = {
   exp: number;
   /** Negative-cache marker (key unknown at console). */
   invalid?: boolean;
+  /** Negative-cache marker (console outage — transport/non-200/bad JSON). L1 only. */
+  unavailable?: boolean;
   /** Scope-verdict marker (key valid, required scope missing). L1 only. */
   entitlementRequired?: boolean;
 };
@@ -205,7 +212,8 @@ function unavailable(
   env: Env,
   ref: string,
   scope: string,
-  detail: string
+  detail: string,
+  cache?: { scopedKey: string; nowSec: number }
 ): VerifyResult {
   if (isSelfHostDegraded(env)) {
     console.warn(
@@ -219,6 +227,20 @@ function unavailable(
       limits: null,
       degraded: true,
     };
+  }
+  if (cache) {
+    // Negative L1 entry (same 10s TTL as invalid keys): a console outage
+    // must not trigger a live fetch (or warn log) on every request.
+    // Keyed per key-hash + scope; degraded fail-open is re-evaluated on
+    // hits, so operator opt-in still applies within the window.
+    l1Set(cache.scopedKey, {
+      tid: "",
+      plan: "",
+      scopes: [],
+      limits: null,
+      exp: cache.nowSec + VERIFY_NEGATIVE_TTL_S,
+      unavailable: true,
+    });
   }
   return {
     ok: false,
@@ -247,11 +269,17 @@ export async function verifyTenant(
   const nowMs = Date.now();
   const nowSec = Math.floor(nowMs / 1000);
 
-  // L1: per-scope entitlement verdict (key valid, scope missing).
+  // L1: per-scope verdicts — entitlement (key valid, scope missing) and
+  // outage (console unreachable/non-200/bad JSON, 10s negative cache).
+  // The outage hit re-runs unavailable() so degraded self-host fail-open
+  // is re-evaluated instead of serving a stale 503.
   const scopedKey = `${cacheKey}|scope:${scope}`;
   const scoped = l1Get(scopedKey, nowMs);
-  if (scoped?.entitlementRequired && scoped.exp > nowSec) {
-    return entitlementFailure(scope);
+  if (scoped && scoped.exp > nowSec) {
+    if (scoped.entitlementRequired) return entitlementFailure(scope);
+    if (scoped.unavailable) {
+      return unavailable(env, ref, scope, "cached: console unavailable");
+    }
   }
 
   // L1: positive / negative entry.
@@ -297,7 +325,10 @@ export async function verifyTenant(
     console.warn(
       JSON.stringify({ type: "tenant_verify_no_console", key: ref, scope })
     );
-    return unavailable(env, ref, scope, "CONSOLE_URL is not configured");
+    return unavailable(env, ref, scope, "CONSOLE_URL is not configured", {
+      scopedKey,
+      nowSec,
+    });
   }
 
   const url = `${base}/api/v1/verify?scope=${encodeURIComponent(scope)}`;
@@ -321,7 +352,10 @@ export async function verifyTenant(
         error: msg,
       })
     );
-    return unavailable(env, ref, scope, "console unreachable");
+    return unavailable(env, ref, scope, "console unreachable", {
+      scopedKey,
+      nowSec,
+    });
   }
 
   if (res.status === 401) {
@@ -373,7 +407,10 @@ export async function verifyTenant(
         status: res.status,
       })
     );
-    return unavailable(env, ref, scope, `console status ${res.status}`);
+    return unavailable(env, ref, scope, `console status ${res.status}`, {
+      scopedKey,
+      nowSec,
+    });
   }
 
   let body: Record<string, unknown>;
@@ -383,7 +420,10 @@ export async function verifyTenant(
     console.warn(
       JSON.stringify({ type: "tenant_verify_bad_json", key: ref, scope })
     );
-    return unavailable(env, ref, scope, "console returned invalid JSON");
+    return unavailable(env, ref, scope, "console returned invalid JSON", {
+      scopedKey,
+      nowSec,
+    });
   }
 
   // Tolerant parse: future full shape {tid, plan, scopes, limits} and the
