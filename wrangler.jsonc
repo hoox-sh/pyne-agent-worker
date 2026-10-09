@@ -115,7 +115,14 @@
     "VALIDATE_MAX_RETRIES": "2",
     // AXIS MCP endpoint for deep app control (run, chart, editor, results…).
     // Production default; point at local AXIS Worker when developing.
-    "AXIS_MCP_URL": "https://worker.axis.hoox.sh/mcp"
+    "AXIS_MCP_URL": "https://worker.axis.hoox.sh/mcp",
+    // SaaS console base URL for the future tenant verify / usage path
+    // (Phase 2 thin slice: Bearer hx_live_… is passthrough only, no remote
+    // fetch yet, so this var is currently informational).
+    // Future quota enforcement will add a TENANT_KEYS KV binding here for the
+    // verify cache (key hash → plan/scopes/limits, 60s TTL). Do NOT add the
+    // binding until the verify path lands — a missing KV id breaks deploy.
+    "CONSOLE_URL": "https://console.hoox.sh"
     // Optional AI Gateway id (observability / caching attribution):
     // "AI_GATEWAY_ID": "pyne-agent-gateway"
   }

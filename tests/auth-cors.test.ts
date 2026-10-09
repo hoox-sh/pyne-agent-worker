@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, expect, test } from "bun:test";
-import { extractApiKey, requireAuth } from "../src/lib/auth";
+import {
+  TENANT_KEY_PREFIX,
+  classifyApiKey,
+  extractApiKey,
+  isTenantKey,
+  requireAuth,
+} from "../src/lib/auth";
 import {
   corsHeaders,
   isOriginAllowed,
@@ -49,6 +55,62 @@ describe("auth", () => {
     const r = new Request("https://x/agents/pyne-agent/s?api_key=tok");
     expect(extractApiKey(r)).toBeNull();
     expect(extractApiKey(r, { allowQuery: true })).toBe("tok");
+  });
+
+  test("legacy success carries tenantPassthrough:false", () => {
+    const env = { API_KEY: "good" } as Env;
+    const r = new Request("https://x", { headers: { "X-API-Key": "good" } });
+    const res = requireAuth(r, env);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.tenantPassthrough).toBe(false);
+  });
+});
+
+describe("tenant bearer passthrough (no enforcement yet)", () => {
+  const tenant = `${TENANT_KEY_PREFIX}test456789abcdef`;
+
+  test("isTenantKey classifies hx_live_… vs legacy", () => {
+    expect(isTenantKey(tenant)).toBe(true);
+    expect(isTenantKey("secret")).toBe(false);
+    expect(isTenantKey(TENANT_KEY_PREFIX)).toBe(false);
+    expect(isTenantKey(null)).toBe(false);
+    expect(isTenantKey(undefined)).toBe(false);
+  });
+
+  test("classifyApiKey returns tenant | legacy | null", () => {
+    expect(classifyApiKey(tenant)).toBe("tenant");
+    expect(classifyApiKey("secret")).toBe("legacy");
+    expect(classifyApiKey(null)).toBeNull();
+  });
+
+  test("tenant bearer accepted even when API_KEY is set", () => {
+    const env = { API_KEY: "good" } as Env;
+    const r = new Request("https://x", {
+      headers: { Authorization: `Bearer ${tenant}` },
+    });
+    const res = requireAuth(r, env);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.tenantPassthrough).toBe(true);
+  });
+
+  test("tenant bearer accepted in open mode", () => {
+    const env = { API_KEY: "" } as Env;
+    const r = new Request("https://x", {
+      headers: { Authorization: `Bearer ${tenant}` },
+    });
+    const res = requireAuth(r, env);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.tenantPassthrough).toBe(true);
+  });
+
+  test("non-tenant bearer still 401 when API_KEY is set", () => {
+    const env = { API_KEY: "good" } as Env;
+    const r = new Request("https://x", {
+      headers: { Authorization: "Bearer wrong" },
+    });
+    const res = requireAuth(r, env);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.status).toBe(401);
   });
 });
 

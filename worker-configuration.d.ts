@@ -54,6 +54,8 @@ interface Env {
   PYNE_WORKER_URL?: string;
   /** AXIS MCP endpoint for deep app control, e.g. https://worker.axis.hoox.sh/mcp */
   AXIS_MCP_URL?: string;
+  /** SaaS console base URL for the future tenant verify / usage path. */
+  CONSOLE_URL?: string;
   /** Bearer for the AXIS MCP endpoint (falls back to API_KEY). Set via secret. */
   AXIS_MCP_KEY?: string;
   /** Default true — run generate→validate→retry when pyne-worker is configured. */

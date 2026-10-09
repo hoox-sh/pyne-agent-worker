@@ -4,12 +4,41 @@
 /**
  * API auth: X-API-Key or Authorization: Bearer <key>.
  * When API_KEY secret is unset, local/open mode is allowed (dev only).
+ *
+ * Phase 2 thin slice: console-issued `hx_live_…` tenant keys are accepted as
+ * passthrough (no remote verify, no metering, no quota yet). Quota
+ * enforcement arrives with the verify path (`CONSOLE_URL` + `TENANT_KEYS`
+ * KV); until then accept-and-flag only. Raw keys are never logged.
  */
 
 export type ExtractApiKeyOpts = {
   /** Browser WebSocket cannot set Authorization; allow ?api_key= / ?key= only then. */
   allowQuery?: boolean;
 };
+
+/** Prefix for console-issued tenant keys (`hx_live_…`). */
+export const TENANT_KEY_PREFIX = "hx_live_";
+
+/** True for console-issued `hx_live_…` tenant keys (passthrough). */
+export function isTenantKey(key: string | null | undefined): boolean {
+  return (
+    typeof key === "string" &&
+    key.length > TENANT_KEY_PREFIX.length &&
+    key.startsWith(TENANT_KEY_PREFIX)
+  );
+}
+
+/** Classify an extracted key: tenant passthrough vs legacy shared secret. */
+export function classifyApiKey(
+  key: string | null | undefined
+): "tenant" | "legacy" | null {
+  if (!key) return null;
+  return isTenantKey(key) ? "tenant" : "legacy";
+}
+
+export type AuthSuccess = { ok: true; tenantPassthrough: boolean };
+export type AuthFailure = { ok: false; status: number; error: string };
+export type AuthResult = AuthSuccess | AuthFailure;
 
 function timingSafeEqualUtf8(a: string, b: string): boolean {
   const enc = new TextEncoder();
@@ -57,15 +86,21 @@ export function requireAuth(
   request: Request,
   env: Env,
   opts?: ExtractApiKeyOpts
-): { ok: true } | { ok: false; status: number; error: string } {
+): AuthResult {
+  const got = extractApiKey(request, opts);
+  if (isTenantKey(got)) {
+    // Console-issued hx_live_… key: passthrough, no remote verify yet.
+    // No behavior change downstream — chat flow is untouched; the flag is
+    // context for the future verify/quota path.
+    return { ok: true, tenantPassthrough: true };
+  }
   const expected = (env.API_KEY || "").trim();
   if (!expected) {
     // Open mode for local `wrangler dev` without secrets.
-    return { ok: true };
+    return { ok: true, tenantPassthrough: false };
   }
-  const got = extractApiKey(request, opts);
   if (!got || !timingSafeEqualUtf8(got, expected)) {
     return { ok: false, status: 401, error: "Unauthorized: missing or invalid API key" };
   }
-  return { ok: true };
+  return { ok: true, tenantPassthrough: false };
 }
