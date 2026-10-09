@@ -176,7 +176,36 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   };
 
   if (path === "/v1/chat" && request.method === "POST") {
-    return withVerify(await handleChat(request, env));
+    // Thread verified tenant metering context into chat (additive only).
+    // Degraded self-host and legacy/open callers are never metered.
+    let meterTid: string | undefined;
+    let meterHash16: string | undefined;
+    let meterAuth: string | undefined;
+    if (
+      auth.ok &&
+      auth.tenantPassthrough &&
+      !auth.degraded &&
+      auth.tenant?.tid
+    ) {
+      const tid = auth.tenant.tid.trim();
+      if (tid && tid !== "unknown" && tid !== "selfhost") {
+        meterTid = tid;
+        meterHash16 = auth.keyHash16;
+        const svc = String(
+          (env as unknown as { USAGE_SERVICE_KEY?: unknown })
+            .USAGE_SERVICE_KEY ?? ""
+        ).trim();
+        meterAuth = svc || auth.keyHash || undefined;
+      }
+    }
+    return withVerify(
+      await handleChat(request, env, {
+        tid: meterTid,
+        keyHash16: meterHash16,
+        authToken: meterAuth,
+        ctx,
+      })
+    );
   }
 
   if (

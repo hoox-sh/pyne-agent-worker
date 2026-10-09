@@ -12,6 +12,11 @@ import { errorJson, json, readJson } from "../lib/json";
 import { DISCLAIMER_SHORT, MARKS } from "../lib/legal";
 import { isValidateAvailable } from "../lib/pyne-worker";
 import {
+  flushUsageQueue,
+  queueUsageEvent,
+  USAGE_SCOPE,
+} from "../lib/usage";
+import {
   buildSystemPrompt,
   buildUserAugmentedMessage,
   wantsPineScript,
@@ -71,7 +76,26 @@ function parseMaxRetries(raw: unknown, envDefault: string | undefined): number {
   return 2;
 }
 
-export async function handleChat(request: Request, env: Env): Promise<Response> {
+/**
+ * Metering context threaded from `authorizeRequest` (additive, optional).
+ * `tid` is the verified tenant id; `authToken` is `USAGE_SERVICE_KEY` or the
+ * per-request tenant hash (hash-on-wire, never the raw key). `ctx` enables
+ * `waitUntil` background flush; without it the flush runs inline with a 2s
+ * budget. `fetchFn` is a test injectable for the console POST.
+ */
+export type ChatMeter = {
+  tid?: string;
+  keyHash16?: string;
+  authToken?: string;
+  ctx?: Pick<ExecutionContext, "waitUntil"> | null;
+  fetchFn?: (url: string, init?: RequestInit) => Promise<Response>;
+};
+
+export async function handleChat(
+  request: Request,
+  env: Env,
+  meter?: ChatMeter
+): Promise<Response> {
   const parsed = await readJson<ChatBody>(request);
   if (!parsed.ok) return errorJson(400, parsed.error);
 
@@ -220,6 +244,44 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
 
   const validateAvailable = isAnyValidateAvailable(env);
   const axisWired = isAxisMcpConfigured(env);
+
+  // Usage metering (Phase 3, additive): only on successful completion with a
+  // verified tid. Failures are swallowed — metering never fails the chat.
+  // Vectorize KB bytes are included when retrieval ran; otherwise omitted.
+  try {
+    const tid = (meter?.tid ?? "").trim();
+    if (tid && tid !== "unknown" && tid !== "selfhost") {
+      let kbBytes: number | undefined;
+      if (ragBackend !== "none" && chunks.length > 0) {
+        const enc = new TextEncoder();
+        let total = 0;
+        for (const c of chunks) total += enc.encode(c.text || "").length;
+        if (total > 0) kbBytes = total;
+      }
+      const queued = queueUsageEvent({
+        tid,
+        scope: USAGE_SCOPE,
+        units:
+          kbBytes !== undefined
+            ? { generations: 1, kbBytes }
+            : { generations: 1 },
+        keyHash16: meter?.keyHash16,
+      });
+      if (queued) {
+        const auth = (meter?.authToken ?? "").trim() || undefined;
+        const flushOpts = { fetchFn: meter?.fetchFn, timeoutMs: 2000 };
+        if (meter?.ctx && typeof meter.ctx.waitUntil === "function") {
+          meter.ctx.waitUntil(
+            flushUsageQueue(env, auth, flushOpts).catch(() => 0)
+          );
+        } else {
+          await flushUsageQueue(env, auth, flushOpts).catch(() => 0);
+        }
+      }
+    }
+  } catch {
+    /* metering never fails chat */
+  }
 
   return json({
     ok: true,

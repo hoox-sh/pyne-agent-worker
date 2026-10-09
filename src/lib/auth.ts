@@ -14,6 +14,7 @@
 
 import {
   BILLING_UPGRADE_URL,
+  sha256Hex,
   verifyTenant,
   type VerifyFetchFn,
 } from "./verify";
@@ -50,6 +51,10 @@ export type AuthSuccess = {
   tenantPassthrough: boolean;
   degraded?: boolean;
   tenant?: { tid: string; plan: string; scopes: string[] };
+  /** Full sha256 hex of the tenant key (hash-on-wire usage auth, never raw). */
+  keyHash?: string;
+  /** First 16 chars of keyHash (usage idem shard). Additive for metering. */
+  keyHash16?: string;
 };
 export type AuthFailure = {
   ok: false;
@@ -163,11 +168,21 @@ export async function authorizeRequest(
     const scope = opts?.scope ?? "agent:chat";
     const v = await verifyTenant(env, got, scope, { fetchFn: opts?.fetchFn });
     if (v.ok) {
+      // Additive metering context: hash-on-wire handle + idem shard.
+      // Raw key never leaves this scope and is never logged.
+      let keyHash = "";
+      try {
+        keyHash = await sha256Hex(got);
+      } catch {
+        keyHash = "";
+      }
       return {
         ok: true,
         tenantPassthrough: true,
         degraded: v.degraded,
         tenant: { tid: v.tid, plan: v.plan, scopes: v.scopes },
+        keyHash: keyHash || undefined,
+        keyHash16: keyHash ? keyHash.slice(0, 16) : undefined,
       };
     }
     if (v.code === "ENTITLEMENT_REQUIRED") {

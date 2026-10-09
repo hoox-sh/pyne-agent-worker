@@ -56,6 +56,11 @@ interface Env {
   AXIS_MCP_URL?: string;
   /** SaaS console base URL for the tenant verify / usage path. */
   CONSOLE_URL?: string;
+  /**
+   * Optional service Bearer for `POST {CONSOLE_URL}/api/v1/usage`.
+   * Falls back to the per-request tenant key hash (hash-on-wire either way).
+   */
+  USAGE_SERVICE_KEY?: string;
   /** KV cache for live tenant verify (key hash → plan/scopes/limits, 60s TTL). */
   TENANT_KEYS?: KVNamespace;
   /**
