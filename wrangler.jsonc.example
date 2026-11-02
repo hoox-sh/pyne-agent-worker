@@ -57,6 +57,7 @@
 
   // --- Optional HOOX mesh only ---
   // Uncomment ONLY if pyne-worker is deployed in the same account.
+  // Sister pyne-worker 0.10.0+ for /run + /ast/*. Comment out if unbound.
   // "services": [
   //   { "binding": "PYNE_SERVICE", "service": "pyne-worker" }
   // ],
@@ -78,7 +79,7 @@
     "PYNE_ALLOW_PRIVATE_URLS": "false",
     "FEATURE_GLM53": "false",
     "FEATURE_SUBAGENTS": "false",
-    "FEATURE_PYNE_AST": "false",
+    "FEATURE_PYNE_AST": "true",
     "FEATURE_KB_384": "false",
     "KB_FALLBACK_V1": "false",
     "FEATURE_RERANK": "false",

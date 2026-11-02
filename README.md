@@ -20,7 +20,7 @@ You can deploy and use this agent with **only Cloudflare® Workers AI™** (plus
 | Mode | What you need | Behavior |
 |------|----------------|----------|
 | **Standalone** | Worker + AI binding (+ optional KB) | NL → PYNE script chat; validation skipped |
-| **HOOX-enhanced** | + pyne-worker service binding or `PYNE_WORKER_URL` | Same chat + generate→validate→retry on `/run` |
+| **HOOX-enhanced** | + pyne-worker 0.10.0+ (`PYNE_SERVICE` or `PYNE_WORKER_URL`) | Chat + staged parse/lint/eval (`/ast/*` + `/run`) |
 
 `GET /health` reports `"mode": "standalone" | "hoox"`. Chat always works in standalone.
 

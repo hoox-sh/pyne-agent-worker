@@ -64,7 +64,7 @@ Users who do not run the HOOX stack still get full NL → PYNE Agent chat (AI + 
 ## Validate loop (optional)
 
 Named PYNE host (`PYNE_BACKEND` / request `pyne_backend`): **generate → staged parse → lint → eval → retry**.  
-Flask hosts use `/lsp/diagnostics` for parse/lint; worker `/ast/*` needs `FEATURE_PYNE_AST` + sister routes.  
+Flask hosts use `/lsp/diagnostics` for parse/lint; worker `/ast/*` needs `FEATURE_PYNE_AST` (on in 0.4.0) + pyne-worker **0.10.0+** (`PYNE_SERVICE` or `PYNE_WORKER_URL`).  
 When only `AXIS_MCP_URL` is set: eval via AXIS `axis_run`.  
 When neither is set: single generate; validation skipped. Never fail chat because a backend is absent.
 
