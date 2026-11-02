@@ -4,7 +4,7 @@
 import { retrieve, type RagChunk } from "../rag/retrieve";
 import { formatRagContext } from "../rag/prompts";
 import { ragTopK } from "../ai/models";
-import { cacheGet, cacheSet } from "./gateway";
+import { cacheGet, cacheSet, ragCacheKey } from "./gateway";
 
 export type KnowledgeHit = {
   id: string;
@@ -37,7 +37,7 @@ export async function searchKnowledge(
   }
 
   const k = ragTopK(env, topK);
-  const cacheKey = `rag:${k}:${q.toLowerCase()}`;
+  const cacheKey = ragCacheKey(env, q, k);
   const cached = cacheGet(cacheKey);
   if (cached) {
     try {

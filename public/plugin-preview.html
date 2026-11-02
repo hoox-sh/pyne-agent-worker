@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PYNE Agent plugin preview</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --color-void: #07080c;
+        --color-bg-base: #07080c;
+        --color-bg-panel: #0c0e14;
+        --color-bg-elev: #10131b;
+        --color-bg-hover: #161a24;
+        --color-border: #1c2230;
+        --color-border-soft: #151922;
+        --color-text: #e8eaee;
+        --color-text-dim: #9aa3b2;
+        --color-text-faint: #6b7382;
+        --color-accent: #8b9cff;
+        --color-accent-hover: #7488f0;
+        --color-red: #f07178;
+        --radius-input: 4px;
+        --radius-panel: 6px;
+        --ui-control-h: 28px;
+        --ui-shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.48);
+        --ui-shadow-dialog: 0 20px 56px rgba(0, 0, 0, 0.62);
+        --ui-font-base: 13px;
+        --ui-label: 11px;
+        --ui-topbar-min-h: 32px;
+      }
+      [data-theme="light"] {
+        --color-void: #f3f4f8;
+        --color-bg-base: #f3f4f8;
+        --color-bg-panel: #eaebf1;
+        --color-bg-elev: #e2e4ec;
+        --color-bg-hover: #d8dbe6;
+        --color-border: #c5cad6;
+        --color-border-soft: #d4d8e2;
+        --color-text: #1a1d26;
+        --color-text-dim: #5c6575;
+        --color-text-faint: #6b7382;
+        --color-accent: #5a6ad4;
+        --color-accent-hover: #4a5ac4;
+        --color-red: #c44750;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(1200px 500px at 10% -10%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 50%),
+          var(--color-void);
+        color: var(--color-text);
+      }
+      .stage {
+        min-height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr;
+      }
+      .chrome {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-bg-elev);
+      }
+      .chrome h1 { margin: 0; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; }
+      .chrome p { margin: 2px 0 0; color: var(--color-text-dim); font-size: 11px; }
+      .chrome-actions { display: flex; gap: 8px; }
+      .chrome button {
+        height: 28px; padding: 0 10px; font: inherit; font-size: 11px; font-weight: 650;
+        color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-elev));
+        border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer;
+      }
+      .desk {
+        position: relative;
+        padding: 24px;
+      }
+      #panel {
+        width: min(440px, 100%);
+        height: min(560px, calc(100vh - 96px));
+        margin-left: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <header class="chrome">
+        <div>
+          <h1>AXIS void · PYNE Agent 0.1.8</h1>
+          <p>Plugin preview — mock /v1/chat, live config chips, orchestrate + backend</p>
+        </div>
+        <div class="chrome-actions">
+          <button type="button" id="theme">Toggle theme</button>
+          <button type="button" id="float">Open float</button>
+        </div>
+      </header>
+      <div class="desk">
+        <div id="panel"></div>
+      </div>
+    </div>
+    <script type="module">
+      import { mountChat, openFloatingModal, buildChatBody } from "./plugin/axis-pine-agent.js";
+
+      const state = {
+        endpoint: "https://pyne-agent-worker.example.workers.dev",
+        apiKey: "",
+        pineVersion: "v6",
+        style: "strategy",
+        persona: "pine",
+        pyneBackend: "worker",
+      };
+
+      const api = {
+        getConfig: () => ({ ...state }),
+        insertScript(code) {
+          console.log("insertScript", code.slice(0, 40));
+        },
+        openScript(code) {
+          console.log("openScript", code.slice(0, 40));
+        },
+        host: {
+          fetch: async (_url, init) => {
+            const body = JSON.parse(init.body || "{}");
+            window.__lastChatBody = body;
+            await new Promise((r) => setTimeout(r, 400));
+            const pine = `//@version=6
+indicator("Preview RSI", overlay=false)
+len = input.int(14, "RSI length")
+r = ta.rsi(close, len)
+plot(r, "RSI", color=color.new(color.purple, 0))
+hline(70)
+hline(30)`;
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                reply:
+                  "RSI oscillator with 70/30 guides.\n\n```pine\n" +
+                  pine +
+                  "\n```\n\n_Validation: validated OK on PYNE after 1 attempt(s)._",
+                pine,
+                model: "@cf/zai-org/glm-5.3",
+                session_id: "preview-1",
+                validation: {
+                  available: true,
+                  skipped: false,
+                  validated: true,
+                  last: { backend: "pyne-worker", ok: true },
+                },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          },
+        },
+      };
+
+      mountChat(document.getElementById("panel"), api, state);
+
+      document.getElementById("theme").addEventListener("click", () => {
+        const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", next === "light" ? "light" : "");
+        if (next === "dark") document.documentElement.removeAttribute("data-theme");
+      });
+      document.getElementById("float").addEventListener("click", () => {
+        openFloatingModal(api, state);
+      });
+      window.__buildChatBody = buildChatBody;
+    </script>
+  </body>
+</html>

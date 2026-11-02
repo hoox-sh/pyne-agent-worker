@@ -63,7 +63,7 @@
 
   "vars": {
     "SERVICE_NAME": "pyne-agent-worker",
-    "SERVICE_VERSION": "0.3.0",
+    "SERVICE_VERSION": "0.4.0",
     "CHAT_MODEL": "@cf/qwen/qwen2.5-coder-32b-instruct",
     "CHAT_MODEL_FALLBACK": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "EMBED_MODEL": "@cf/baai/bge-base-en-v1.5",
@@ -71,7 +71,25 @@
     "CORPUS_MAX_SCRIPTS": "1000",
     "ALLOWED_ORIGINS": "http://localhost:8081,http://localhost:5173,https://hoox.sh,https://axis.hoox.sh",
     "VALIDATE_DEFAULT": "true",
-    "VALIDATE_MAX_RETRIES": "2"
+    "VALIDATE_MAX_RETRIES": "2",
+    "PYNE_BACKEND": "auto",
+    "PYNE_PRO_URL": "https://pynescript.online",
+    "PYNE_LOCAL_URL": "http://127.0.0.1:5002",
+    "PYNE_ALLOW_PRIVATE_URLS": "false",
+    "FEATURE_GLM53": "false",
+    "FEATURE_SUBAGENTS": "false",
+    "FEATURE_PYNE_AST": "false",
+    "FEATURE_KB_384": "false",
+    "KB_FALLBACK_V1": "false",
+    "FEATURE_RERANK": "false",
+    "EMBED_MODEL_V2": "@cf/baai/bge-small-en-v1.5",
+    "EMBED_POOLING": "mean",
+    "EMBED_POOLING_V2": "cls",
+    "CHAT_MODELS": "",
+    "REASONING_EFFORT": "high",
+    "VALIDATE_STAGES": "parse,lint,eval",
+    "MAX_SUBAGENTS": "6",
+    "SUBAGENT_CONCURRENCY": "3"
     // Production HOOX default (optional for standalone):
     // "AXIS_MCP_URL": "https://worker.axis.hoox.sh/mcp"
     // "PYNE_WORKER_URL": "https://pyne-worker.example.workers.dev"

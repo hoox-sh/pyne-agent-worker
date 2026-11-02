@@ -14,6 +14,10 @@ import {
   presentReply,
   scriptNameFromPine,
   stripValidationNotes,
+  normalizePyneBackend,
+  buildChatBody,
+  shortBackend,
+  PLUGIN_UI_VERSION,
 } from "../plugin/axis-pine-agent.js";
 
 const pluginPath = join(import.meta.dir, "..", "plugin", "axis-pine-agent.js");
@@ -24,8 +28,12 @@ describe("plugin contract", () => {
     expect(src).toContain("cfg({ ...(config || {}), ...(api?.getConfig?.() || {}) })");
     expect(src).toContain("bootstrapFloating(ctx)");
     expect(src).toContain("api?.getConfig?.() || {}");
-    expect(src).toContain('version: "0.1.7"');
-    expect(src).toContain('const PLUGIN_UI_VERSION = "0.1.7"');
+    expect(src).toContain('version: "0.1.8"');
+    expect(src).toContain('const PLUGIN_UI_VERSION = "0.1.8"');
+    expect(src).toContain("orchestrate: true");
+    expect(src).toContain("pyne_backend: live.pyneBackend");
+    expect(src).toContain('options: ["auto", "pro", "local", "worker", "container", "none"]');
+    expect(PLUGIN_UI_VERSION).toBe("0.1.8");
   });
 });
 
@@ -37,7 +45,16 @@ describe("cfg", () => {
       pineVersion: "auto",
       style: "auto",
       persona: "auto",
+      pyneBackend: "auto",
     });
+  });
+
+  test("reads pyneBackend and rejects unknown kinds", () => {
+    expect(cfg({ pyneBackend: "pro" }).pyneBackend).toBe("pro");
+    expect(cfg({ pyne_backend: "CONTAINER" }).pyneBackend).toBe("container");
+    expect(cfg({ pyneBackend: "ftp" }).pyneBackend).toBe("auto");
+    expect(normalizePyneBackend("none")).toBe("none");
+    expect(normalizePyneBackend("")).toBe("auto");
   });
 
   test("live fields override the snapshot", () => {
@@ -143,6 +160,33 @@ describe("editor delivery", () => {
   test("scriptNameFromPine reads a string title and falls back", () => {
     expect(scriptNameFromPine("indicator('Gap fill')")).toBe("Gap fill");
     expect(scriptNameFromPine("plot(close)")).toBe("Agent script");
+  });
+});
+
+describe("chat body", () => {
+  test("0.1.8 always orchestrates and sends a backend kind", () => {
+    const live = cfg({
+      endpoint: "https://agent.example",
+      persona: "axis",
+      pyneBackend: "worker",
+    });
+    expect(buildChatBody(live, "Write RSI", "sess-1")).toEqual({
+      message: "Write RSI",
+      session_id: "sess-1",
+      pine_version: "auto",
+      style: "auto",
+      persona: "axis",
+      pyne_backend: "worker",
+      orchestrate: true,
+    });
+    expect(buildChatBody(live, "hi", null).session_id).toBeUndefined();
+  });
+
+  test("shortBackend maps worker envelopes", () => {
+    expect(shortBackend("pyne-worker")).toBe("worker");
+    expect(shortBackend("pyne-pro")).toBe("pro");
+    expect(shortBackend("axis-mcp")).toBe("axis");
+    expect(shortBackend("none")).toBe("");
   });
 });
 

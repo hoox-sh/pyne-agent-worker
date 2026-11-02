@@ -263,8 +263,6 @@ export async function axisMcpCallTool(
 
 export type AxisRunOpts = {
   script: string;
-  symbol?: string;
-  timeframe?: string;
   /** Synthetic bars when the caller has no real OHLCV (default 128). */
   bars?: number;
 };
@@ -315,7 +313,7 @@ export async function validateOnAxisMcp(
   }
   const res = await axisRunPine(
     env,
-    { script: opts.script, symbol: opts.symbol, bars: 128 },
+    { script: opts.script, bars: 128 },
     rpcOpts
   );
   if (!res.ok) {

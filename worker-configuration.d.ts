@@ -52,6 +52,17 @@ interface Env {
   AI_GATEWAY_ID?: string;
   /** HTTPS origin of pyne-worker when service binding is unavailable. */
   PYNE_WORKER_URL?: string;
+  /** Named PYNE host: auto | pro | local | worker | container | none */
+  PYNE_BACKEND?: string;
+  PYNE_PRO_URL?: string;
+  PYNE_PRO_API_KEY?: string;
+  PYNE_LOCAL_URL?: string;
+  PYNE_LOCAL_API_KEY?: string;
+  PYNE_CONTAINER_URL?: string;
+  PYNE_CONTAINER_API_KEY?: string;
+  PYNE_CONTAINER_INSTANCE?: string;
+  /** Allow loopback/RFC1918 PYNE URLs (wrangler dev). Default false. */
+  PYNE_ALLOW_PRIVATE_URLS?: string;
   /** AXIS MCP endpoint for deep app control, e.g. https://worker.axis.hoox.sh/mcp */
   AXIS_MCP_URL?: string;
   /** SaaS console base URL for the tenant verify / usage path. */
@@ -79,4 +90,32 @@ interface Env {
   CHAT_MODELS?: string;
   /** pyne-worker validate timeout in ms (default 20000, max 60000). */
   PYNE_VALIDATE_TIMEOUT_MS?: string;
+
+  FEATURE_GLM53?: string;
+  FEATURE_SUBAGENTS?: string;
+  FEATURE_PYNE_AST?: string;
+  FEATURE_KB_384?: string;
+  KB_FALLBACK_V1?: string;
+  FEATURE_RERANK?: string;
+  REASONING_EFFORT?: string;
+  /** Comma list: parse,lint,eval */
+  VALIDATE_STAGES?: string;
+  /** Total agents including orchestrator (default 6 → max 5 specialists). */
+  MAX_SUBAGENTS?: string;
+  /** In-flight specialist generateText cap (default 3). */
+  SUBAGENT_CONCURRENCY?: string;
+  CUSTOM_MODEL_ENDPOINT?: string;
+  CUSTOM_MODEL_API_KEY?: string;
+  CUSTOM_MODEL_NAME?: string;
+  MODEL_PARSER?: string;
+  MODEL_VALIDATOR?: string;
+  MODEL_OPTIMIZER?: string;
+  MODEL_DOCS?: string;
+  MODEL_AXIS?: string;
+  MODEL_DYNAMIC?: string;
+  EMBED_MODEL_V2?: string;
+  EMBED_POOLING?: string;
+  EMBED_POOLING_V2?: string;
+  /** Optional 384-d Vectorize binding (PR 7). */
+  VECTORIZE_V2?: VectorizeIndex;
 }

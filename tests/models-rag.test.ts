@@ -4,12 +4,18 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ragTopK } from "../src/ai/models";
 import {
+  MODEL_GLM53,
+  MODEL_KIMI_K27,
+  allowedChatModels,
   clampMaxTokens,
   clampTemperature,
-  ragTopK,
+  effectiveChatFallback,
+  effectiveChatModel,
+  isRetryableModelError,
   resolveRequestedModel,
-} from "../src/ai/models";
+} from "../src/ai/routing";
 import { SERVICE_VERSION } from "../src/lib/version";
 import { buildAgentSystemPrompt } from "../src/agent/prompts-v6";
 import { buildSystemPrompt } from "../src/rag/prompts";
@@ -20,10 +26,18 @@ describe("model allowlist / clamps", () => {
     CHAT_MODEL: "@cf/qwen/qwen2.5-coder-32b-instruct",
     CHAT_MODEL_FALLBACK: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     RAG_TOP_K: "8",
+    FEATURE_GLM53: "false",
+    CHAT_MODELS: "",
   } as Env;
 
   test("rejects unknown client model", () => {
     expect(resolveRequestedModel(env, "@cf/evil/huge")).toBe(env.CHAT_MODEL);
+  });
+
+  test("rejects URL model ids (prompt exfil)", () => {
+    expect(
+      resolveRequestedModel(env, "https://evil.example/v1")
+    ).toBe(env.CHAT_MODEL);
   });
 
   test("accepts primary and fallback", () => {
@@ -32,9 +46,23 @@ describe("model allowlist / clamps", () => {
     expect(resolveRequestedModel(env, fallback)).toBe(fallback);
   });
 
-  test("clamps tokens and temperature", () => {
+  test("paid ids rejected when FEATURE_GLM53 is off", () => {
+    expect(allowedChatModels(env).has(MODEL_GLM53)).toBe(false);
+    expect(resolveRequestedModel(env, MODEL_GLM53)).toBe(env.CHAT_MODEL);
+  });
+
+  test("FEATURE_GLM53 injects paid ids and promotes defaults", () => {
+    const on = { ...env, FEATURE_GLM53: "true" } as Env;
+    expect(effectiveChatModel(on)).toBe(MODEL_GLM53);
+    expect(effectiveChatFallback(on)).toBe(MODEL_KIMI_K27);
+    expect(allowedChatModels(on).has(MODEL_GLM53)).toBe(true);
+    expect(resolveRequestedModel(on, MODEL_KIMI_K27)).toBe(MODEL_KIMI_K27);
+  });
+
+  test("clamps tokens by family", () => {
     expect(clampMaxTokens(12)).toBe(256);
     expect(clampMaxTokens(99_000)).toBe(8192);
+    expect(clampMaxTokens(99_000, MODEL_GLM53)).toBe(32768);
     expect(clampTemperature(-1)).toBe(0);
     expect(clampTemperature(9)).toBe(1.5);
   });
@@ -42,6 +70,20 @@ describe("model allowlist / clamps", () => {
   test("clamps search top_k", () => {
     expect(ragTopK(env, 999)).toBe(24);
     expect(ragTopK(env, 0)).toBe(8);
+  });
+
+  test("Workers AI 403-5035 is retryable; plain 403 is not", () => {
+    expect(
+      isRetryableModelError("HTTP 403 internal error 5035", {
+        source: "workers-ai",
+      })
+    ).toBe(true);
+    expect(
+      isRetryableModelError("HTTP 403 forbidden", { source: "workers-ai" })
+    ).toBe(false);
+    expect(
+      isRetryableModelError("HTTP 403", { source: "axis" })
+    ).toBe(false);
   });
 });
 
@@ -55,17 +97,54 @@ describe("prompt lockstep", () => {
       expect(s).toMatch(/when=/);
     }
   });
+
+  test("Grandmaster tools modes differ", () => {
+    const none = buildSystemPrompt({ pineVersion: "v6", tools: "none" });
+    const axis = buildSystemPrompt({ pineVersion: "v6", tools: "axis" });
+    const full = buildSystemPrompt({ pineVersion: "v6", tools: "full" });
+    expect(none).toContain("You have no tools on this path");
+    expect(none).not.toContain("pyne_parse");
+    expect(axis).toContain("axis_chart_load");
+    expect(axis).toContain("Do not call pyne_*");
+    expect(full).toContain("pyne_parse");
+    expect(full).toContain("axis_editor_set");
+    const agent = buildAgentSystemPrompt({ pineVersion: "v6" });
+    expect(agent).toContain("pyne_eval");
+  });
+
+  test("cheap REST pine persona omits Prefer acting AXIS control", () => {
+    const cheap = buildSystemPrompt({
+      pineVersion: "v6",
+      persona: "pine",
+      tools: "none",
+    });
+    expect(cheap).not.toContain("Prefer acting over describing");
+    const full = buildSystemPrompt({
+      pineVersion: "v6",
+      persona: "pine",
+      tools: "full",
+    });
+    expect(full).toContain("Prefer acting over describing");
+  });
 });
 
 describe("version", () => {
-  test("SERVICE_VERSION is 0.3.0", () => {
-    expect(SERVICE_VERSION).toBe("0.3.0");
+  test("SERVICE_VERSION is 0.4.0", () => {
+    expect(SERVICE_VERSION).toBe("0.4.0");
   });
 
-  test("health fallback is 0.3.0", async () => {
+  test("health fallback is 0.4.0 with feature flags", async () => {
     const res = await handleHealth({} as Env);
-    const body = (await res.json()) as { version: string };
-    expect(body.version).toBe("0.3.0");
+    const body = (await res.json()) as {
+      version: string;
+      features: { glm53: boolean; pyne_ast: { flag: boolean } };
+      indexes: { v1: number; v2: string | number };
+    };
+    expect(body.version).toBe("0.4.0");
+    expect(body.features.glm53).toBe(false);
+    expect(body.features.pyne_ast.flag).toBe(false);
+    expect(body.indexes.v1).toBe(768);
+    expect(body.indexes.v2).toBe("unbound");
   });
 });
 

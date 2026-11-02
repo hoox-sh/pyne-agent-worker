@@ -31,38 +31,3 @@ export function ragTopK(env: Env, requested?: number): number {
   if (!Number.isFinite(n) || n < 1) return 8;
   return Math.min(Math.floor(n), 24);
 }
-
-function extraChatModels(env: Env): string[] {
-  return String(env.CHAT_MODELS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-export function allowedChatModels(env: Env): Set<string> {
-  return new Set([
-    chatModel(env),
-    chatFallbackModel(env),
-    DEFAULT_CHAT_MODEL,
-    DEFAULT_CHAT_FALLBACK,
-    ...extraChatModels(env),
-  ]);
-}
-
-/** Honor a client model id only if it is on the allowlist. */
-export function resolveRequestedModel(env: Env, requested?: string): string {
-  const primary = chatModel(env);
-  const id = (requested || "").trim();
-  if (!id) return primary;
-  return allowedChatModels(env).has(id) ? id : primary;
-}
-
-export function clampMaxTokens(n?: number): number {
-  if (n == null || !Number.isFinite(n)) return 4096;
-  return Math.max(256, Math.min(8192, Math.floor(n)));
-}
-
-export function clampTemperature(n?: number): number {
-  if (n == null || !Number.isFinite(n)) return 0.2;
-  return Math.max(0, Math.min(1.5, n));
-}

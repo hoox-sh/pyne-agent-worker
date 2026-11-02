@@ -5,14 +5,22 @@ import { tool } from "ai";
 import { z } from "zod";
 import { searchKnowledge } from "./knowledge";
 import { formatLintForModel, lintPine } from "./lint";
-import {
-  axisApp,
-  axisMcpCallTool,
-  axisMcpListTools,
-  axisMcpStatus,
-  axisRunPine,
-  isAxisMcpConfigured,
-} from "../axis/mcp-client";
+import { createAxisTools } from "./tools-axis";
+import { createPyneTools } from "./tools-pyne";
+import { createSubagentTools } from "./tools-subagent";
+import { featureSubagents } from "../ai/routing";
+import type { SpecialistQuota } from "./subagents/quota";
+
+export type AgentToolsCatalog = "full" | "axis";
+
+export type CreateAgentToolsOpts = {
+  /** full = default; axis = REST looksActionable (no pyne_*, no spawn). */
+  catalog?: AgentToolsCatalog;
+  /** Per-request quota; required for subagent_spawn. */
+  quota?: SpecialistQuota;
+  /** When true and FEATURE_SUBAGENTS, attach subagent_spawn. */
+  allowSpawn?: boolean;
+};
 
 export type AxisPane = {
   id: string;
@@ -34,30 +42,36 @@ export type AxisChartLayout = {
  * Server-side tools for PyneAgent (AIChatAgent + MCP).
  * Strict Zod schemas prevent malformed tool args from crashing the DO.
  */
-export function createAgentTools(env: Env) {
-  return {
-    search_knowledge_base: tool({
-      description:
-        "Search Pine Script™ / PYNE knowledge (AI Search hybrid or Vectorize fallback) for exact syntax, builtins, and limits before writing code.",
-      inputSchema: z.object({
-        query: z
-          .string()
-          .min(2)
-          .max(500)
-          .describe("Search query, e.g. 'strategy.entry v6' or 'ta.rsi signature'"),
-        top_k: z.number().int().min(1).max(12).optional().describe("Max chunks (default 6)"),
-      }),
-      execute: async ({ query, top_k }) => {
-        const result = await searchKnowledge(env, query, top_k ?? 6);
-        return {
-          ok: true,
-          cached: Boolean(result.cached),
-          backend: result.backend,
-          hit_count: result.hits.length,
-          text: result.formatted,
-        };
-      },
+export function createAgentTools(env: Env, opts?: CreateAgentToolsOpts) {
+  const catalog = opts?.catalog ?? "full";
+
+  const searchKbTool = tool({
+    description:
+      "Search Pine Script™ / PYNE knowledge (AI Search hybrid or Vectorize fallback) for exact syntax, builtins, and limits before writing code.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .min(2)
+        .max(500)
+        .describe("Search query, e.g. 'strategy.entry v6' or 'ta.rsi signature'"),
+      top_k: z.number().int().min(1).max(12).optional().describe("Max chunks (default 6)"),
     }),
+    execute: async ({ query, top_k }) => {
+      const result = await searchKnowledge(env, query, top_k ?? 6);
+      return {
+        ok: true,
+        cached: Boolean(result.cached),
+        backend: result.backend,
+        hit_count: result.hits.length,
+        text: result.formatted,
+      };
+    },
+  });
+
+  const core = {
+    search_knowledge_base: searchKbTool,
+    /** Alias of search_knowledge_base (0.4.0 vocabulary). */
+    rag_search: searchKbTool,
 
     validate_pine: tool({
       description:
@@ -115,7 +129,6 @@ export function createAgentTools(env: Env) {
           panes: input.panes,
           colors: input.colors,
         };
-        // Client tools / plugin intercept this JSON as a data part.
         return {
           ok: true,
           type: "axis_chart_layout",
@@ -125,142 +138,33 @@ export function createAgentTools(env: Env) {
         };
       },
     }),
-
-    axis_mcp_status: tool({
-      description:
-        "Check the AXIS MCP wiring: configured endpoint, reachability, tool count, and whether a PWA tab is bridged (app-plane control needs bridge_connected > 0). Call before any axis_* control tool.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const status = await axisMcpStatus(env);
-        return {
-          ok: status.reachable,
-          configured: status.configured,
-          url: status.url,
-          reachable: status.reachable,
-          latency_ms: status.latency_ms,
-          server: status.server ?? null,
-          tools: status.tools ?? null,
-          bridge_connected: status.bridge_connected ?? 0,
-          error: status.error ?? null,
-          hint: !status.configured
-            ? "Set AXIS_MCP_URL on the worker to enable AXIS control."
-            : status.bridge_connected
-              ? "App-plane control available."
-              : "Worker-plane only — ask the user to open AXIS → Settings → MCP for live-chart control.",
-        };
-      },
-    }),
-
-    axis_mcp_tools: tool({
-      description:
-        "List the AXIS MCP tool catalog (worker-plane axis_* + app-plane app_*). Use axis_control to call anything listed here.",
-      inputSchema: z.object({
-        refresh: z.boolean().optional().describe("Bypass the 5-minute cache"),
-      }),
-      execute: async ({ refresh }) => {
-        if (!isAxisMcpConfigured(env)) {
-          return { ok: false, error: "AXIS MCP not configured (set AXIS_MCP_URL)." };
-        }
-        const tools = await axisMcpListTools(env, { refresh: refresh ?? false });
-        return { ok: true, count: tools.length, tools };
-      },
-    }),
-
-    axis_control: tool({
-      description:
-        "Escape hatch: call any AXIS MCP tool by name (axis_run, axis_scripts_put, axis_market, axis_onchain, app_invoke, app_get, app_set, …). Prefer the composed axis_run_pine / axis_app tools when they fit.",
-      inputSchema: z.object({
-        tool: z
-          .string()
-          .min(1)
-          .max(80)
-          .describe("AXIS MCP tool name, e.g. 'axis_scripts_put' or 'chart.load' via app_invoke"),
-        args: z
-          .record(z.string(), z.unknown())
-          .optional()
-          .describe("Tool arguments as a JSON object"),
-      }),
-      execute: async ({ tool: name, args }) => {
-        const res = await axisMcpCallTool(env, name, args ?? {});
-        if (!res.ok) return { ok: false, error: res.error, code: res.code ?? null };
-        return {
-          ok: true,
-          text: res.text,
-          structured: res.structured ?? null,
-          truncated: res.truncated,
-        };
-      },
-    }),
-
-    axis_run_pine: tool({
-      description:
-        "Run Pine Script™ on AXIS (worker plane, no PWA needed) and get the real engine result. Lint first, then run, then repair from the actual error. This is the write→run→fix loop primitive.",
-      inputSchema: z.object({
-        code: z.string().min(1).max(80_000).describe("Full Pine source to execute"),
-        symbol: z.string().max(24).optional().describe("Ticker label for the run"),
-        timeframe: z.string().max(8).optional().describe("Bar timeframe, e.g. '1h'"),
-      }),
-      execute: async ({ code, symbol, timeframe }) => {
-        const lint = lintPine(code);
-        if (!lint.ok) {
-          return {
-            ok: false,
-            stage: "lint",
-            summary: formatLintForModel(lint),
-            issues: lint.issues,
-            hint: "Fix lint errors before running.",
-          };
-        }
-        const res = await axisRunPine(env, {
-          script: lint.fixed,
-          symbol,
-          timeframe,
-        });
-        if (!res.ok) {
-          return { ok: false, stage: "run", error: res.error, code: res.code ?? null };
-        }
-        return {
-          ok: true,
-          stage: "run",
-          text: res.text,
-          structured: res.structured ?? null,
-          truncated: res.truncated,
-          lint_fixed: lint.changed,
-        };
-      },
-    }),
-
-    axis_app: tool({
-      description:
-        "Drive the connected AXIS PWA: editor.set/get/run/diagnostics, chart.load/get/set/reload/live/layout/theme/type/zoom/screenshot, indicators.*, alerts.*, watchlist.*, library.*, results.get, logs.get, drawings.*, settings.*, workspace.export/import, panels.*, plugins.*, status.get. Requires a bridged tab (see axis_mcp_status).",
-      inputSchema: z.object({
-        capability: z
-          .string()
-          .min(3)
-          .max(80)
-          .describe("App capability, e.g. 'editor.set', 'chart.load', 'results.get'"),
-        payload: z
-          .record(z.string(), z.unknown())
-          .optional()
-          .describe("Capability payload as a JSON object"),
-        session: z.string().max(80).optional().describe("Bridge session (usually omitted)"),
-      }),
-      execute: async ({ capability, payload, session }) => {
-        const res = await axisApp(env, {
-          capability,
-          payload: payload ?? {},
-          session,
-        });
-        if (!res.ok) return { ok: false, error: res.error, code: res.code ?? null };
-        return {
-          ok: true,
-          text: res.text,
-          structured: res.structured ?? null,
-          truncated: res.truncated,
-        };
-      },
-    }),
   };
+
+  if (catalog === "axis") {
+    return {
+      ...core,
+      ...createAxisTools(env),
+    };
+  }
+
+  const full = {
+    ...core,
+    ...createAxisTools(env),
+    ...createPyneTools(env),
+  };
+
+  if (
+    opts?.allowSpawn &&
+    opts.quota &&
+    featureSubagents(env)
+  ) {
+    return {
+      ...full,
+      ...createSubagentTools(env, opts.quota),
+    };
+  }
+
+  return full;
 }
 
 export type AgentTools = ReturnType<typeof createAgentTools>;

@@ -3,12 +3,23 @@
 
 /** Simple text chunker for RAG ingest (scripts only; not shipped as TV content). */
 
+import {
+  normalizeKnowledgeKind,
+  type KnowledgeKind,
+} from "../../src/lib/knowledge-kind";
+
+export type { KnowledgeKind };
+export { normalizeKnowledgeKind };
+
 export type TextChunk = {
   id: string;
   text: string;
   title: string;
   source: string;
-  kind: string;
+  kind: KnowledgeKind | string;
+  pine_version?: "v5" | "v6" | "mixed";
+  product?: "pine" | "pyne" | "axis" | "hoox";
+  builtin?: string;
 };
 
 export function chunkText(
@@ -45,7 +56,7 @@ export function chunkText(
         text: body,
         title: opts.title,
         source: opts.source,
-        kind: opts.kind,
+        kind: normalizeKnowledgeKind(opts.kind),
       });
       part += 1;
     }

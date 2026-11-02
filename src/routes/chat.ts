@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import type { ChatMessage } from "../ai/workers-ai";
+import { ragTopK } from "../ai/models";
 import {
   clampMaxTokens,
   clampTemperature,
-  ragTopK,
   resolveRequestedModel,
-} from "../ai/models";
+} from "../ai/routing";
 import { errorJson, json, readJson } from "../lib/json";
 import { DISCLAIMER_SHORT, MARKS } from "../lib/legal";
-import { isValidateAvailable } from "../lib/pyne-worker";
 import {
   flushUsageQueue,
   queueUsageEvent,
@@ -33,6 +32,20 @@ import { runAgenticChat, type AgenticAction } from "../rag/agentic";
 import { searchKnowledge } from "../agent/knowledge";
 import { detectPersona, looksActionable, normalizePersona } from "../agent/personas";
 import { isAxisMcpConfigured } from "../axis/mcp-client";
+import {
+  anyPyneEvalConfigured,
+  envPyneBackend,
+  parsePyneBackend,
+  type PyneBackendKind,
+} from "../lib/pyne-backend";
+import { createOrchestratorTools } from "../agent/orchestrator";
+import {
+  featureGlm53,
+  featureKb384,
+  featurePyneAst,
+  featureSubagents,
+} from "../ai/routing";
+import { maxSpecialistsFromEnv } from "../agent/subagents/quota";
 
 export type ChatBody = {
   /** Natural language request */
@@ -65,7 +78,24 @@ export type ChatBody = {
   max_retries?: number;
   /** pyne-worker mode for validation (default interpret) */
   validate_mode?: "interpret" | "compile" | "auto";
+  /**
+   * Full tool loop (plugin 0.1.8 always sends true). Missing = cheap REST.
+   */
+  orchestrate?: boolean;
+  /** Named PYNE host. Kind only — never a URL. */
+  pyne_backend?: PyneBackendKind;
+  /** Max specialists this turn (0..5). Ignored unless orchestrate + FEATURE_SUBAGENTS. */
+  max_subagents?: number;
 };
+
+function parseOrchestrate(raw: unknown): boolean {
+  return raw === true || raw === "true" || raw === 1;
+}
+
+function parseMaxSubagents(raw: unknown): number | undefined {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  return Math.max(0, Math.min(5, Math.floor(raw)));
+}
 
 function parseMaxRetries(raw: unknown, envDefault: string | undefined): number {
   if (typeof raw === "number" && Number.isFinite(raw)) {
@@ -107,6 +137,14 @@ export async function handleChat(
   if (userText.length > 32_000) {
     return errorJson(413, "message too large (max 32k chars)");
   }
+  const rawKind = (body as { pyne_backend?: unknown }).pyne_backend;
+  const pyneBackend = parsePyneBackend(
+    rawKind == null || rawKind === "" ? envPyneBackend(env) : rawKind
+  );
+  if (!pyneBackend) {
+    return errorJson(400, "invalid pyne_backend", { code: "INVALID_FIELD" });
+  }
+  const orchestrate = parseOrchestrate(body.orchestrate);
 
   let sessionId = body.session_id?.trim() || "";
   let history: ChatMessage[] = Array.isArray(body.history) ? body.history : [];
@@ -151,11 +189,22 @@ export async function handleChat(
     }
   }
 
+  // Compute actionable / orchestrate *before* the system prompt so Grandmaster
+  // tools mode and AXIS control prose match the tool loop we will run.
+  const persona = detectPersona(userText, body.persona);
+  const actionable =
+    isAxisMcpConfigured(env) && looksActionable(userText, persona);
+  // Plugin 0.1.8 always sends orchestrate:true. Missing field stays cheap REST.
+  // orchestrate wins over looksActionable (full tools, 8 steps vs AXIS ≤4).
+  const runTools = orchestrate || actionable;
+  const toolsMode = orchestrate ? "full" : actionable ? "axis" : "none";
+
   const system = buildSystemPrompt({
     pineVersion: body.pine_version,
     style: body.style,
     persona: normalizePersona(body.persona),
     userText,
+    tools: toolsMode,
   });
   const augmented = buildUserAugmentedMessage(userText, chunks);
 
@@ -165,27 +214,43 @@ export async function handleChat(
     { role: "user", content: augmented },
   ];
 
-  const persona = detectPersona(userText, body.persona);
-  const actionable =
-    isAxisMcpConfigured(env) && looksActionable(userText, persona);
-
   // Operator path: let the model ACT first (bounded tool loop), then feed
   // its output through the normal generate→validate→retry loop as attempt 1.
   // Any agentic failure falls back to the single-shot loop below.
   let seedResult: { text: string; model: string; latencyMs: number } | null = null;
   let mcpActions: AgenticAction[] = [];
+  let subagents: Array<{
+    role: string;
+    model?: string;
+    ok: boolean;
+    latency_ms: number;
+    error?: string;
+    skipped?: boolean;
+  }> = [];
   const model = resolveRequestedModel(env, body.model);
   const temperature = clampTemperature(body.temperature);
-  const maxTokens = clampMaxTokens(body.max_tokens);
-  if (actionable) {
+  const maxTokens = clampMaxTokens(body.max_tokens, model); // family cap (Qwen 8k / GLM 32k)
+  const maxSubagents = maxSpecialistsFromEnv(
+    env,
+    parseMaxSubagents(body.max_subagents)
+  );
+  if (runTools) {
     try {
+      const bundle = createOrchestratorTools(env, {
+        catalog: orchestrate ? "full" : "axis",
+        allowSpawn: orchestrate && featureSubagents(env),
+        maxSubagents,
+      });
       const agentic = await runAgenticChat(env, {
         system,
         messages,
-        maxSteps: 4,
+        maxSteps: orchestrate ? (bundle.allowSpawn ? 12 : 8) : 4,
         temperature,
         maxTokens,
         model,
+        catalog: bundle.catalog,
+        allowSpawn: bundle.allowSpawn,
+        quota: bundle.quota ?? undefined,
       });
       seedResult = {
         text: agentic.text,
@@ -193,11 +258,13 @@ export async function handleChat(
         latencyMs: agentic.latencyMs,
       };
       mcpActions = agentic.actions;
+      subagents = agentic.subagents || [];
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(JSON.stringify({ type: "agentic_failed", error: msg }));
       degraded.push("agentic");
       seedResult = null;
+      subagents = [];
     }
   }
 
@@ -220,6 +287,7 @@ export async function handleChat(
       validateMode: body.validate_mode || "interpret",
       requirePine: wantsPineScript(userText),
       seedResult,
+      pyneBackend,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -242,7 +310,7 @@ export async function handleChat(
     }
   }
 
-  const validateAvailable = isAnyValidateAvailable(env);
+  const validateAvailable = isAnyValidateAvailable(env, pyneBackend);
   const axisWired = isAxisMcpConfigured(env);
 
   // Usage metering (Phase 3, additive): only on successful completion with a
@@ -283,12 +351,25 @@ export async function handleChat(
     /* metering never fails chat */
   }
 
+  const featureList = [
+    featureSubagents(env) ? "subagents" : null,
+    featureGlm53(env) ? "glm53" : null,
+    featurePyneAst(env) ? "pyne_ast" : null,
+    featureKb384(env) ? "kb_384" : null,
+    orchestrate ? "orchestrate" : null,
+    toolsMode !== "none" ? `tools:${toolsMode}` : null,
+  ].filter((x): x is string => Boolean(x));
+
   return json({
     ok: true,
-    mode: isValidateAvailable(env) ? "hoox" : axisWired ? "axis" : "standalone",
+    mode: anyPyneEvalConfigured(env, pyneBackend) ? "hoox" : axisWired ? "axis" : "standalone",
     axis_mcp: axisWired,
     persona,
+    pyne_backend: pyneBackend,
+    orchestrate,
+    features: featureList,
     mcp_actions: mcpActions,
+    subagents,
     session_id: sessionId || null,
     reply: loopResult.text,
     pine: loopResult.pine,
@@ -312,6 +393,8 @@ export async function handleChat(
             status: loopResult.validation.status,
             latency_ms: loopResult.validation.latency_ms,
             reason: loopResult.validation.reason,
+            backend: loopResult.validation.backend,
+            stage: loopResult.validation.stage,
           }
         : null,
       attempts: loopResult.attempts.map((a) => ({

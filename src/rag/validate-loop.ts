@@ -17,12 +17,28 @@ import {
 } from "../ai/workers-ai";
 import {
   formatValidateError,
-  isValidateAvailable,
-  validateOnPyneWorker,
   type ValidateResult,
 } from "../lib/pyne-worker";
 import { isAxisMcpConfigured, validateOnAxisMcp } from "../axis/mcp-client";
+import {
+  anyPyneEvalConfigured,
+  type PyneBackendKind,
+  validateOnSelectedBackend,
+} from "../lib/pyne-backend";
+import { pyneAstOp, pyneLintOrHeuristic } from "../lib/pyne-ast";
 import { extractPineBlock } from "./prompts";
+
+export type ValidateStage = "parse" | "lint" | "eval";
+
+export function parseValidateStages(env: Env): ValidateStage[] {
+  const raw = String(env.VALIDATE_STAGES || "parse,lint,eval");
+  const allowed = new Set<ValidateStage>(["parse", "lint", "eval"]);
+  const stages = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s): s is ValidateStage => allowed.has(s as ValidateStage));
+  return stages.length > 0 ? stages : ["parse", "lint", "eval"];
+}
 
 export type AttemptRecord = {
   attempt: number;
@@ -57,6 +73,8 @@ export type ValidateLoopOpts = {
   /** Extra retries after first failure (default 2 → up to 3 generates) */
   maxRetries?: number;
   validateMode?: "interpret" | "compile" | "auto";
+  /** Named PYNE host for this turn (`auto` uses env PYNE_BACKEND). */
+  pyneBackend?: PyneBackendKind;
   /**
    * Prefetched first attempt (e.g. from the agentic tool loop). Counts as
    * attempt 1: pine is extracted and validated, retries continue via chatFn.
@@ -87,13 +105,30 @@ function buildFixUserMessage(
   validation: ValidateResult
 ): string {
   const backend = backendLabel(validation);
-  const err = formatValidateError(validation);
+  const structured = {
+    stage: validation.stage || "eval",
+    backend,
+    ok: false,
+    retryable: validation.retryable !== false,
+    error: validation.error || formatValidateError(validation),
+    error_kind: validation.error_kind ?? null,
+    error_type: validation.error_type ?? null,
+    error_bar: validation.error_bar ?? null,
+    line: validation.line ?? null,
+    column: validation.column ?? null,
+    hint: "Fix the script. Keep intent. Prefer PYNE/AXIS-safe APIs. Do not claim TradingView® parity.",
+  };
   return [
-    `The previous Pine Script™ failed validation on ${backend}.`,
+    `The previous Pine Script™ failed validation on ${backend} (stage=${structured.stage}).`,
     "Fix the script so it parses and runs. Keep the same intent.",
     "",
-    `## ${backend} error`,
-    err,
+    "## Structured error",
+    "```json",
+    JSON.stringify(structured, null, 2),
+    "```",
+    "",
+    `## ${backend} one-liner`,
+    formatValidateError(validation),
     "",
     "## Previous script",
     "```pine",
@@ -130,16 +165,103 @@ function appendValidationNote(
   return `${text.trim()}\n\n_Validation: ${status}._`;
 }
 
-/** True when any validation backend (pyne-worker or AXIS MCP) is available. */
-export function isAnyValidateAvailable(env: Env): boolean {
-  return isValidateAvailable(env) || isAxisMcpConfigured(env);
+/** True when a validate pass should run (may still skip with a reason). */
+export function isAnyValidateAvailable(
+  env: Env,
+  kind: PyneBackendKind = "auto"
+): boolean {
+  if (kind === "none") return isAxisMcpConfigured(env);
+  if (kind === "auto") {
+    return anyPyneEvalConfigured(env, "auto") || isAxisMcpConfigured(env);
+  }
+  // Explicit kind: still call the host so an unbound pick surfaces as skip.
+  return true;
 }
 
-/** Default validator: pyne-worker first, AXIS MCP second, skip-record last. */
-function defaultValidateFn(env: Env): ValidateFn {
-  if (isValidateAvailable(env)) return validateOnPyneWorker;
-  if (isAxisMcpConfigured(env)) return validateOnAxisMcp;
-  return validateOnPyneWorker; // returns skipped when unconfigured
+/**
+ * Staged validate: parse → lint → eval (VALIDATE_STAGES).
+ * Missing /ast routes skip that stage without burning a GPU retry.
+ * AXIS visual (editor.*) is never called here.
+ */
+export async function stagedValidate(
+  env: Env,
+  opts: { script: string; mode?: "interpret" | "compile" | "auto" },
+  kind: PyneBackendKind = "auto"
+): Promise<ValidateResult> {
+  const stages = parseValidateStages(env);
+  const started = Date.now();
+
+  if (stages.includes("parse")) {
+    const p = await pyneAstOp(env, "parse", opts.script, kind);
+    if (!p.skipped && !p.ok) {
+      return {
+        ok: false,
+        stage: "parse",
+        backend: p.backend,
+        error: p.error,
+        error_kind: p.error_kind || "parse",
+        line: p.line,
+        column: p.column,
+        status: p.status,
+        retryable: p.retryable !== false,
+        latency_ms: Date.now() - started,
+        raw: p.raw,
+      };
+    }
+  }
+
+  if (stages.includes("lint")) {
+    const l = await pyneLintOrHeuristic(env, opts.script, kind);
+    if (!l.skipped && !l.ok) {
+      return {
+        ok: false,
+        stage: "lint",
+        backend: l.backend,
+        error: l.error,
+        error_kind: l.error_kind || "lint",
+        line: l.line,
+        column: l.column,
+        status: l.status,
+        retryable: l.retryable !== false,
+        latency_ms: Date.now() - started,
+        raw: l.raw,
+      };
+    }
+  }
+
+  if (!stages.includes("eval")) {
+    return {
+      ok: true,
+      stage: "lint",
+      backend: "staged",
+      latency_ms: Date.now() - started,
+      reason: "VALIDATE_STAGES omitted eval",
+    };
+  }
+
+  // Eval: named PYNE host, else AXIS worker-plane axis_run.
+  if (kind !== "none" && anyPyneEvalConfigured(env, kind)) {
+    const r = await validateOnSelectedBackend(env, opts, kind);
+    return { ...r, stage: r.stage || "eval" };
+  }
+  if ((kind === "auto" || kind === "none") && isAxisMcpConfigured(env)) {
+    const r = await validateOnAxisMcp(env, opts);
+    return { ...r, stage: r.stage || "eval" };
+  }
+  return {
+    ok: false,
+    skipped: true,
+    retryable: false,
+    stage: "eval",
+    backend: "none",
+    reason: "no eval backend configured",
+    latency_ms: Date.now() - started,
+  };
+}
+
+/** Named PYNE host first. AXIS only for `auto` / `none`. Explicit kinds never fall through. */
+function defaultValidateFn(_env: Env, kind: PyneBackendKind = "auto"): ValidateFn {
+  return (e, opts) => stagedValidate(e, opts, kind);
 }
 
 /**
@@ -153,12 +275,11 @@ export async function generateValidateRetry(
     Math.min(opts.maxRetries ?? 2, 5)
   );
   const chatFn = opts.chatFn || chatComplete;
-  const validateFn = opts.validateFn || defaultValidateFn(opts.env);
+  const kind = opts.pyneBackend || "auto";
+  const validateFn = opts.validateFn || defaultValidateFn(opts.env, kind);
   const wantValidate =
     opts.validate !== false &&
-    (opts.validateFn
-      ? true
-      : isAnyValidateAvailable(opts.env));
+    (opts.validateFn ? true : isAnyValidateAvailable(opts.env, kind));
 
   const messages: ChatMessage[] = [...opts.messages];
   const attempts: AttemptRecord[] = [];

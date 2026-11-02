@@ -3,15 +3,18 @@
 
 import { embedQuery } from "../ai/workers-ai";
 import { ragTopK } from "../ai/models";
+import {
+  type EmbedIdentity,
+  embedIdentityV1,
+  embedIdentityV2,
+  kbFallbackV1,
+  resolveEmbedIdentity,
+  vectorizeBinding,
+} from "../ai/routing";
 
-export type KnowledgeKind =
-  | "docs-v5"
-  | "docs-v6"
-  | "docs"
-  | "corpus"
-  | "builtin-ref"
-  | "template"
-  | "other";
+import type { KnowledgeKind } from "../lib/knowledge-kind";
+
+export type { KnowledgeKind };
 
 export type RagChunk = {
   id: string;
@@ -27,23 +30,25 @@ export type RetrieveOpts = {
   topK?: number;
   /** Optional metadata filter: only these kinds */
   kinds?: string[];
+  /** Force index identity. Default: feature-flagged active. */
+  index?: "v1" | "v2";
 };
 
-/**
- * Semantic retrieve against Vectorize™.
- * Vectors were upserted by scripts/build-index.ts with metadata.text (or R2 pointer).
- */
-export async function retrieve(
+async function queryWithIdentity(
   env: Env,
-  opts: RetrieveOpts
+  ident: EmbedIdentity,
+  opts: RetrieveOpts,
+  topK: number
 ): Promise<RagChunk[]> {
-  // Standalone / degraded: no Vectorize binding → empty context (chat still works).
-  if (!env.VECTORIZE || !env.AI) {
-    return [];
-  }
+  const binding = vectorizeBinding(env, ident);
+  if (!binding || !env.AI) return [];
 
-  const topK = ragTopK(env, opts.topK);
-  const vector = await embedQuery(env, opts.query);
+  const vector = await embedQuery(env, opts.query, ident);
+  if (vector.length !== ident.dimensions) {
+    throw new Error(
+      `embed dim ${vector.length} != identity ${ident.dimensions} (${ident.id})`
+    );
+  }
 
   const queryOpts: VectorizeQueryOptions = {
     topK,
@@ -54,8 +59,7 @@ export async function retrieve(
     queryOpts.filter = { kind: opts.kinds[0] };
   }
 
-  const result = await env.VECTORIZE.query(vector, queryOpts);
-
+  const result = await binding.query(vector, queryOpts);
   const matches = result.matches ?? [];
   const pending = matches.map((m) => {
     const meta = (m.metadata || {}) as Record<string, unknown>;
@@ -113,4 +117,61 @@ export async function retrieve(
   }
 
   return chunks;
+}
+
+/**
+ * Semantic retrieve against Vectorize™.
+ * Never queries a 768-d index with a 384-d vector (or the reverse).
+ * Empty/error on V2 → skip RAG unless KB_FALLBACK_V1=true (then re-embed V1).
+ */
+export async function retrieve(
+  env: Env,
+  opts: RetrieveOpts
+): Promise<RagChunk[]> {
+  if (!env.AI) return [];
+
+  const topK = ragTopK(env, opts.topK);
+
+  if (opts.index === "v1") {
+    if (!env.VECTORIZE) return [];
+    return queryWithIdentity(env, embedIdentityV1(env), opts, topK);
+  }
+
+  if (opts.index === "v2") {
+    const v2 = embedIdentityV2(env);
+    if (!v2) return [];
+    return queryWithIdentity(env, v2, opts, topK);
+  }
+
+  // auto: prefer V2 when flagged+bound; never cross-query dims
+  const v2 = embedIdentityV2(env);
+  if (v2) {
+    try {
+      const chunks = await queryWithIdentity(env, v2, opts, topK);
+      if (chunks.length > 0) return chunks;
+      if (kbFallbackV1(env) && env.VECTORIZE) {
+        return queryWithIdentity(env, embedIdentityV1(env), opts, topK);
+      }
+      return [];
+    } catch (e) {
+      if (kbFallbackV1(env) && env.VECTORIZE) {
+        console.warn(
+          JSON.stringify({
+            type: "vectorize_v2_failed_fallback_v1",
+            error: e instanceof Error ? e.message : String(e),
+          })
+        );
+        return queryWithIdentity(env, embedIdentityV1(env), opts, topK);
+      }
+      throw e;
+    }
+  }
+
+  if (!env.VECTORIZE) return [];
+  return queryWithIdentity(
+    env,
+    resolveEmbedIdentity(env, "auto"),
+    opts,
+    topK
+  );
 }

@@ -12,18 +12,23 @@
  */
 
 import { syntheticBars } from "./synthetic-bars";
+import { pynePostJson } from "./pyne-http";
 
 export type ValidateResult = {
   ok: boolean;
   skipped?: boolean;
-  /** Which backend produced this result (`pyne-worker` | `axis-mcp`). */
+  /** Which backend produced this result (`pyne-worker` | `axis-mcp` | …). */
   backend?: string;
+  /** Stage that failed or completed: parse | lint | eval */
+  stage?: string;
   reason?: string;
   status?: number;
   error?: string;
   error_kind?: string;
   error_type?: string;
   error_bar?: number;
+  line?: number;
+  column?: number;
   mode?: string;
   bars?: number;
   latency_ms: number;
@@ -49,48 +54,21 @@ export function isValidateAvailable(env: Env): boolean {
   return workerConfigured(env);
 }
 
-const DEFAULT_VALIDATE_TIMEOUT_MS = 20_000;
-
-function validateTimeoutMs(env: Env): number {
-  const n = Number(env.PYNE_VALIDATE_TIMEOUT_MS || DEFAULT_VALIDATE_TIMEOUT_MS);
-  if (!Number.isFinite(n) || n < 1_000) return DEFAULT_VALIDATE_TIMEOUT_MS;
-  return Math.min(Math.floor(n), 60_000);
-}
-
 async function postRun(
   env: Env,
   body: Record<string, unknown>
 ): Promise<{ status: number; data: Record<string, unknown> }> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const headers: Record<string, string> = {};
   const key = (env.PYNE_WORKER_API_KEY || env.API_KEY || "").trim();
-  if (key) {
-    headers["X-API-Key"] = key;
-  }
-
-  const init: RequestInit = {
-    method: "POST",
+  if (key) headers["X-API-Key"] = key;
+  const base = (env.PYNE_WORKER_URL || "").replace(/\/$/, "");
+  return pynePostJson({
+    env,
+    service: env.PYNE_SERVICE,
+    url: env.PYNE_SERVICE ? undefined : `${base}/run`,
+    body,
     headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(validateTimeoutMs(env)),
-  };
-
-  let res: Response;
-  if (env.PYNE_SERVICE) {
-    res = await env.PYNE_SERVICE.fetch("https://pyne-worker/run", init);
-  } else {
-    const base = (env.PYNE_WORKER_URL || "").replace(/\/$/, "");
-    res = await fetch(`${base}/run`, init);
-  }
-
-  let data: Record<string, unknown> = {};
-  try {
-    data = (await res.json()) as Record<string, unknown>;
-  } catch {
-    data = { error: `Non-JSON response from pyne-worker (HTTP ${res.status})` };
-  }
-  return { status: res.status, data };
+  });
 }
 
 /**
@@ -189,7 +167,7 @@ export async function validateOnPyneWorker(
       backend: "pyne-worker",
       error: msg,
       reason: timeout
-        ? `pyne-worker timeout after ${validateTimeoutMs(env)}ms`
+        ? `pyne-worker timeout`
         : `pyne-worker transport: ${msg}`,
       latency_ms: Date.now() - started,
     };

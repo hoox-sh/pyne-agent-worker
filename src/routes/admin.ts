@@ -2,7 +2,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { embedTexts } from "../ai/workers-ai";
+import {
+  resolveEmbedIdentity,
+  vectorizeBinding,
+  type EmbedIdentity,
+} from "../ai/routing";
 import { errorJson, json, readJson } from "../lib/json";
+import { normalizeKnowledgeKind } from "../lib/knowledge-kind";
+
+function parseIndex(raw: unknown): "v1" | "v2" | "auto" {
+  const s = String(raw || "auto").trim().toLowerCase();
+  if (s === "v1" || s === "v2") return s;
+  return "auto";
+}
+
+function identityForAdmin(env: Env, index: "v1" | "v2" | "auto"): EmbedIdentity {
+  try {
+    return resolveEmbedIdentity(env, index === "auto" ? "auto" : index);
+  } catch {
+    return resolveEmbedIdentity(env, "v1");
+  }
+}
 
 /**
  * Admin embed helper for build-index.ts.
@@ -19,7 +39,12 @@ export async function handleAdminEmbed(
     );
   }
 
-  const parsed = await readJson<{ texts?: string[]; text?: string }>(request);
+  const parsed = await readJson<{
+    texts?: string[];
+    text?: string;
+    index?: string;
+    pooling?: string;
+  }>(request);
   if (!parsed.ok) return errorJson(400, parsed.error);
 
   const texts = Array.isArray(parsed.data.texts)
@@ -36,9 +61,27 @@ export async function handleAdminEmbed(
     }
   }
 
+  const ident = identityForAdmin(env, parseIndex(parsed.data.index));
+  const poolingRaw = String(parsed.data.pooling || "").toLowerCase();
+  const pooling =
+    poolingRaw === "mean" || poolingRaw === "cls"
+      ? poolingRaw
+      : ident.pooling;
+
   try {
-    const vectors = await embedTexts(env, texts);
-    return json({ ok: true, vectors, data: vectors });
+    const vectors = await embedTexts(env, texts, {
+      identity: ident,
+      pooling,
+    });
+    return json({
+      ok: true,
+      vectors,
+      data: vectors,
+      index: ident.id,
+      model: ident.model,
+      pooling,
+      dimensions: ident.dimensions,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return errorJson(502, `embed failed: ${msg}`);
@@ -46,6 +89,8 @@ export async function handleAdminEmbed(
 }
 
 export type IndexUpsertBody = {
+  index?: string;
+  pooling?: string;
   items?: Array<{
     id: string;
     text: string;
@@ -70,17 +115,34 @@ export async function handleAdminIndex(
   if (!items.length) return errorJson(400, "items[] required");
   if (items.length > 32) return errorJson(413, "max 32 items per request");
 
+  const ident = identityForAdmin(env, parseIndex(parsed.data.index));
+  const binding = vectorizeBinding(env, ident);
+  if (!binding) {
+    return errorJson(
+      503,
+      `Vectorize binding ${ident.binding} not configured for index=${ident.id}`
+    );
+  }
+
+  const poolingRaw = String(parsed.data.pooling || "").toLowerCase();
+  const pooling =
+    poolingRaw === "mean" || poolingRaw === "cls"
+      ? poolingRaw
+      : ident.pooling;
+
   const vectors = await embedTexts(
     env,
-    items.map((i) => i.text.slice(0, 6000))
+    items.map((i) => i.text.slice(0, 6000)),
+    { identity: ident, pooling }
   );
 
   const prepared = items
     .map((it, i) => {
       const values = vectors[i];
       if (!it?.id || !values) return null;
-      const r2Key = `kb/${it.kind || "other"}/${it.id.replace(/[:/]/g, "_")}.json`;
-      return { it, values, r2Key };
+      const kind = normalizeKnowledgeKind(it.kind || "other");
+      const r2Key = `kb/${kind}/${it.id.replace(/[:/]/g, "_")}.json`;
+      return { it: { ...it, kind }, values, r2Key };
     })
     .filter((row): row is NonNullable<typeof row> => row !== null);
 
@@ -112,8 +174,15 @@ export async function handleAdminIndex(
   }));
 
   if (upserts.length) {
-    await env.VECTORIZE.upsert(upserts);
+    await binding.upsert(upserts);
   }
 
-  return json({ ok: true, upserted: upserts.length });
+  return json({
+    ok: true,
+    upserted: upserts.length,
+    index: ident.id,
+    model: ident.model,
+    pooling,
+    dimensions: ident.dimensions,
+  });
 }

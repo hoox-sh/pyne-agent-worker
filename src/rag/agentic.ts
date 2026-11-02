@@ -16,9 +16,14 @@
  */
 
 import { generateText, stepCountIs } from "ai";
-import { createAgentTools } from "../agent/tools";
+import {
+  createAgentTools,
+  type AgentToolsCatalog,
+} from "../agent/tools";
 import { resolveChatModel } from "../agent/gateway";
+import { isRetryableModelError } from "../ai/routing";
 import type { ChatMessage, ChatResult } from "../ai/workers-ai";
+import type { SpecialistQuota } from "../agent/subagents/quota";
 
 export type AgenticAction = {
   tool: string;
@@ -26,8 +31,18 @@ export type AgenticAction = {
   summary: string;
 };
 
+export type SubagentReport = {
+  role: string;
+  model?: string;
+  ok: boolean;
+  latency_ms: number;
+  error?: string;
+  skipped?: boolean;
+};
+
 export type AgenticResult = ChatResult & {
   actions: AgenticAction[];
+  subagents: SubagentReport[];
 };
 
 function summarizeResult(name: string, value: unknown): AgenticAction {
@@ -60,12 +75,22 @@ export async function runAgenticChat(
     temperature?: number;
     maxTokens?: number;
     model?: string;
+    /** axis = looksActionable; full = orchestrate. */
+    catalog?: AgentToolsCatalog;
+    allowSpawn?: boolean;
+    quota?: SpecialistQuota;
   }
 ): Promise<AgenticResult> {
   const started = Date.now();
-  const tools = createAgentTools(env);
+  const catalog = opts.catalog ?? "full";
+  const tools = createAgentTools(env, {
+    catalog,
+    allowSpawn: opts.allowSpawn === true && catalog === "full",
+    quota: opts.quota,
+  });
+  const stepCap = catalog === "full" && opts.allowSpawn ? 12 : 8;
   const run = async (useFallback: boolean) => {
-    const { model, modelId } = resolveChatModel(env, {
+    const { model, modelId, providerOptions } = resolveChatModel(env, {
       fallback: useFallback,
       model: opts.model,
     });
@@ -78,7 +103,10 @@ export async function runAgenticChat(
         content: m.content,
       })),
       tools,
-      stopWhen: stepCountIs(Math.max(1, Math.min(opts.maxSteps ?? 4, 6))),
+      ...(providerOptions ? { providerOptions } : {}),
+      stopWhen: stepCountIs(
+        Math.max(1, Math.min(opts.maxSteps ?? 4, stepCap))
+      ),
       temperature: opts.temperature,
       maxOutputTokens: opts.maxTokens,
     });
@@ -90,7 +118,7 @@ export async function runAgenticChat(
     packed = await run(false);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (/timeout|overloaded|capacity|503|429/i.test(msg)) {
+    if (isRetryableModelError(msg, { source: "workers-ai" })) {
       packed = await run(true);
     } else {
       throw e;
@@ -98,6 +126,7 @@ export async function runAgenticChat(
   }
   const { result, modelId } = packed;
   const actions: AgenticAction[] = [];
+  const subagents: SubagentReport[] = [];
   const calls = (result as { toolCalls?: unknown }).toolCalls;
   const results = (result as { toolResults?: unknown }).toolResults;
   if (Array.isArray(results)) {
@@ -106,6 +135,18 @@ export async function runAgenticChat(
       const name =
         typeof r.toolName === "string" && r.toolName ? r.toolName : "unknown";
       actions.push(summarizeResult(name, r.result));
+      if (name === "subagent_spawn" && r.result && typeof r.result === "object") {
+        const rec = r.result as Record<string, unknown>;
+        subagents.push({
+          role: String(rec.role || "dynamic"),
+          model: rec.model != null ? String(rec.model) : undefined,
+          ok: rec.ok === true,
+          latency_ms:
+            typeof rec.latency_ms === "number" ? rec.latency_ms : 0,
+          error: typeof rec.error === "string" ? rec.error : undefined,
+          skipped: rec.skipped === true,
+        });
+      }
     }
   } else if (Array.isArray(calls)) {
     for (const tc of calls) {
@@ -120,5 +161,6 @@ export async function runAgenticChat(
     model: modelId,
     latencyMs: Date.now() - started,
     actions,
+    subagents,
   };
 }

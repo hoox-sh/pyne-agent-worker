@@ -1,6 +1,6 @@
-# PYNE Agent — Agents SDK edge architecture
+# PYNE Agent — Grandmaster edge architecture
 
-Branch: `feat/agents-sdk-edge-architecture` · Service version **0.3.0**
+Service version **0.4.0** (worker). Plugin **0.1.8**. Grandmaster capabilities ship behind feature flags; git defaults stay Free-plan safe until operators opt in.
 
 _Pine Script™ and TradingView® are trademarks of TradingView, Inc.  
 Cloudflare® is a registered trademark of Cloudflare, Inc._
@@ -13,109 +13,115 @@ Stateful **NL → Pine Script™ v6** agent on Cloudflare Workers:
 |---------|------|-------------|
 | **Agents SDK chat** | `/agents/pyne-agent/:session` | Durable Object SQLite (`AIChatAgent`) |
 | **MCP tools** | `/mcp` | Durable Object (`McpAgent`) |
-| **Legacy REST** | `POST /v1/chat` | Optional D1 (unchanged) |
-| **AXIS plugin** | `/plugin/axis-pine-agent.js` | Client UI |
+| **REST** | `POST /v1/chat` | Optional D1 |
+| **AXIS plugin** | `/plugin/axis-pine-agent.js` | Client UI (0.1.8 always `orchestrate: true`) |
 
-Standalone-first: **Workers AI only** is enough. AI Search, Vectorize, R2, D1, pyne-worker, AI Gateway are optional enhancements.
+Standalone-first: **Workers AI only** is enough. AI Search, Vectorize, R2, D1, PYNE hosts, AXIS MCP, AI Gateway are optional.
 
-## Pillar map (10 agents → modules)
+## Pillar map
 
 | # | Pillar | Implementation |
 |---|--------|----------------|
-| 1 | Agents SDK / DO | `src/agent/pyne-agent.ts` · `new_sqlite_classes: ["PyneAgent","PyneMcp"]` |
-| 2 | LLM / prompts | `src/agent/prompts-v6.ts` · `workers-ai-provider` + `streamText` |
-| 3 | AI Search / RAG | `src/agent/knowledge.ts` · `AI_SEARCH` + Vectorize fallback |
-| 4 | AXIS chart tool | `render_axis_chart` in `src/agent/tools.ts` |
-| 5 | Lint / validate | `src/agent/lint.ts` · tool `validate_pine` |
-| 6 | Gateway / cache | `src/agent/gateway.ts` · model fallback + RAG cache |
-| 7 | Streaming UI | Agents WS protocol + `public/agent.html` |
-| 8 | MCP | `src/mcp/pyne-mcp.ts` · `POST /mcp` |
-| 9 | Guardrails | `looksOffTopic` + Zod tool schemas |
-| 10 | QA | `tests/lint.test.ts` (+ existing suite) |
+| 1 | Agents SDK / DO | `src/agent/pyne-agent.ts` · `PyneAgent` + `PyneMcp` |
+| 2 | Model routing | `src/ai/routing.ts` · `FEATURE_GLM53` gated allowlist · BYOM |
+| 3 | Grandmaster prompts | `src/agent/grandmaster.ts` · `tools: none\|axis\|full` |
+| 4 | RAG | `src/agent/knowledge.ts` · AI Search → Vectorize V1/V2 |
+| 5 | PYNE backends | `src/lib/pyne-backend.ts` · pro / local / worker / container |
+| 6 | Language + staged validate | `src/lib/pyne-ast.ts` · `src/rag/validate-loop.ts` |
+| 7 | AXIS tools | `src/agent/tools-axis.ts` · wrappers + escape hatches |
+| 8 | Sub-agents | `src/agent/subagents/*` · `FEATURE_SUBAGENTS` · per-request quota |
+| 9 | MCP | `src/mcp/pyne-mcp.ts` · additive tools · `rag_search` alias |
+| 10 | Guardrails / QA | Zod schemas · `looksOffTopic` · `bun test` |
 
-## Wrangler bindings
+## Feature flags (git defaults)
 
-```jsonc
-{
-  "ai": { "binding": "AI" },
-  "ai_search_namespaces": [{ "binding": "AI_SEARCH", "namespace": "default", "remote": true }],
-  "vectorize": [{ "binding": "VECTORIZE", "index_name": "pyne-agent-kb" }],
-  "durable_objects": {
-    "bindings": [
-      { "name": "PyneAgent", "class_name": "PyneAgent" },
-      { "name": "PyneMcp", "class_name": "PyneMcp" }
-    ]
-  },
-  "migrations": [{ "tag": "v1-agents-sdk", "new_sqlite_classes": ["PyneAgent", "PyneMcp"] }]
-}
+| Flag | Default | Effect when `true` |
+|------|---------|-------------------|
+| `FEATURE_GLM53` | `false` | Allowlist GLM-5.3 / Flash / Kimi; promote default Qwen → GLM |
+| `FEATURE_SUBAGENTS` | `false` | Attach `subagent_spawn` on SDK / `orchestrate: true` |
+| `FEATURE_PYNE_AST` | `false` | Worker `/ast/*` language ops |
+| `FEATURE_KB_384` | `false` | Prefer Vectorize V2 (384-d, `cls`) when bound |
+| `KB_FALLBACK_V1` | `false` | On empty/error V2, re-embed and query 768-d V1 |
+
+## REST chat paths
+
+| Request | Tools mode | Loop |
+|---------|------------|------|
+| Missing `orchestrate` (curl / plugin 0.1.7) | `none` | Generate + **server-side** staged parse→lint→eval |
+| `looksActionable` + AXIS MCP | `axis` | ≤4 steps, AXIS tools only (no `pyne_*`, no spawn) |
+| `orchestrate: true` (plugin 0.1.8) | `full` | ≤8–12 steps; spawn if `FEATURE_SUBAGENTS` |
+
+Compute actionable / orchestrate **before** `buildSystemPrompt` so Grandmaster prose matches the tool catalog.
+
+## Tools (composition root: `src/agent/tools.ts`)
+
+| Group | Tools |
+|-------|-------|
+| Knowledge | `search_knowledge_base`, `rag_search` (alias) |
+| Lint | `validate_pine` (heuristic) |
+| Layout | `render_axis_chart` |
+| PYNE language | `pyne_parse`, `pyne_ast`, `pyne_unparse`, `pyne_format`, `pyne_lint`, `pyne_diagnostics`, `pyne_compile`, `pyne_eval` |
+| AXIS | `axis_mcp_status`, wrappers (`axis_chart_load`, `axis_editor_set`, `axis_editor_run`, `axis_alerts_create`, `axis_results_get`, `axis_engine_tick`), `axis_run_pine`, `axis_app`, `axis_control` |
+| Sub-agents | `subagent_spawn` (SDK/orchestrate only; **not** on MCP) |
+
+`axis_run_pine` sends only `{ script, data }` — never ticker/timeframe. Strategy stats live on `axis_results_get` / `results.get` (no `results.strategy` tool).
+
+## PYNE backends
+
+Named kinds (client sends a kind, never a URL): `auto` · `pro` · `local` · `worker` · `container` · `none`.
+
+| Kind | Dialect | Language | Eval |
+|------|---------|----------|------|
+| `worker` | `{ script, ohlcv, timeframe }` | `/ast/*` when flagged | `POST /run` |
+| `pro` / `local` / `container` | Flask `{ script, data }` | `/lsp/diagnostics` | `POST /run` |
+| `none` | — | heuristic lint | AXIS `axis_run` if configured |
+
+`auto` order: worker → container → pro → local. Loopback needs `PYNE_ALLOW_PRIVATE_URLS=true`.
+
+## Validation
+
+Staged: **parse → lint → eval** (`VALIDATE_STAGES`). Missing `/ast` skips that stage (not a parse failure). Structured JSON error on retry. Never App-plane `editor.*` inside `generateValidateRetry`.
+
+## Knowledge indexes
+
+| Binding | Dims | Model | Pooling |
+|---------|------|-------|---------|
+| `VECTORIZE` | 768 | `bge-base-en-v1.5` | `mean` |
+| `VECTORIZE_V2` (optional) | 384 | `bge-small-en-v1.5` | `cls` |
+
+Never cross-query dimensions. Create V2 with:
+
+```bash
+npx wrangler vectorize create pyne-agent-kb-384 --dimensions=384 --metric=cosine
 ```
+
+## Sub-agents
+
+Per-request quota: max **5** specialists, **3** in-flight, isolate fuse. Nested spawn forbidden. MCP never exposes `subagent_spawn` in 0.4.0.
 
 ## Session isolation
 
 - Agent instance name **is** the session id: `/agents/pyne-agent/<session>`.
-- Each session is a separate Durable Object — chat history does not bleed across users.
-- Prefer opaque random session ids from the client (do not reuse public user emails as names without hashing).
-- Session state carries `pineVersion`, `style`, **`persona`** (`auto` default; validated on write). `auto` re-detects per turn.
-
-## Personas
-
-`src/agent/personas.ts` — detection (`detectPersona`), action gating
-(`looksActionable`), and prompt composition (`personaSystemSection`, prose in
-`src/axis/prompts.ts` so REST + SDK stay in lockstep).
-
-| Persona | System adds | Acts? |
-|---------|-------------|-------|
-| `pine` | Trading craft + AXIS control manual | validate/run loop only |
-| `axis` | Control manual + operator policy (read-before-write, confirm-before-destructive) | yes — bounded tool loop on REST, full loop on SDK |
-| `trader` | Trader desk (analysis frame, invalidation, risk math, psychology) + control manual | yes — market/result context first |
-
-REST (`POST /v1/chat`) runs the agentic loop only when actionable
-(`axis`/`trader` + action verb, ≤4 steps); the output seeds the
-validate loop as attempt 1 and surfaces as `mcp_actions`. Anything else
-stays single-shot.
-
-## Tools
-
-| Tool | Purpose |
-|------|---------|
-| `search_knowledge_base` | AI Search hybrid → Vectorize fallback; isolate-level TTL cache |
-| `validate_pine` | Heuristic lint + safe auto-fixes (`security`→`request.security`) |
-| `render_axis_chart` | Structural AXIS pane layout JSON for the plugin |
-| `axis_mcp_status` | AXIS wiring probe (endpoint, reachability, tool count, bridged tabs) |
-| `axis_mcp_tools` | Cached AXIS MCP tool catalog |
-| `axis_control` | Escape-hatch call for any AXIS MCP tool |
-| `axis_run_pine` | Lint → AXIS `axis_run` → real engine result (write→run→fix primitive) |
-| `axis_app` | App-plane control (`editor.*`, `chart.*`, `results.*`, …) |
+- Each session is a separate Durable Object.
+- State: `pineVersion`, `style`, `persona` (`auto` re-detects per turn).
 
 ## Edge cases
 
 | Case | Handling |
 |------|----------|
-| DO hibernation | AIChatAgent SQLite + resumable stream buffers |
-| Primary model timeout | Retry once with `CHAT_MODEL_FALLBACK` |
-| AI Search missing | Vectorize retrieve; empty → conservative prompt |
-| Malformed tool args | Zod schemas reject before execute |
-| Off-topic prompt | Short refusal, no tool loop |
-| Chit-chat (`hi`, `thanks`) | `wantsPineScript` rejects → single conversational pass, no validate loop (a forced fence goads hallucinated "revised" scripts) |
-| AXIS `NO_BACKEND` | `validateOnAxisMcp` returns skipped (not failed) with the operator fix; loop stops after 1 attempt and the reply carries a `_Note:_` instead of retrying a permanently-incapable backend |
-| `API_KEY` set | REST + MCP + `/agents` (including WebSocket) require key; browser WS may pass `?api_key=` |
+| Primary model timeout / 403-5035 | Retry once with fallback |
+| AI Search missing | Vectorize; empty → conservative prompt |
+| Off-topic / chit-chat | Refusal or greeting; no validate loop |
+| AXIS `NO_BACKEND` / `UNKNOWN_FIELDS` | Skip, no GPU retry |
+| Explicit `pyne_backend` unbound | Skip with reason (no silent fallthrough) |
+| Missing `orchestrate` | Cheap REST |
 
-## Validation
+## Validation commands
 
 ```bash
 bun test
 bun run typecheck
 bun run legal-check
-```
-
-Manual:
-
-```bash
-bun run dev
-# REST still works:
-curl -s localhost:8787/health | jq .
-# MCP (open mode):
-# configure Cursor/VS Code MCP URL → http://127.0.0.1:8787/mcp
 ```
 
 ## Legal

@@ -9,7 +9,7 @@ Cloudflare® is a registered trademark of Cloudflare, Inc._
 https://<your-deploy>/plugin/axis-pine-agent.js
 ```
 
-Module path in this repo: `plugin/axis-pine-agent.js` (also served from `public/plugin/`).
+Module path in this repo: `plugin/axis-pine-agent.js` (also served from `public/plugin/`). Preview: `/plugin-preview.html`.
 
 ## Docs (synced)
 
@@ -28,6 +28,9 @@ Module path in this repo: `plugin/axis-pine-agent.js` (also served from `public/
 | `pineVersion` | no | `auto` / `v5` / `v6` |
 | `style` | no | indicator / strategy / library |
 | `persona` | no | `auto` / `pine` / `axis` / `trader` |
+| `pyneBackend` | no | `auto` / `pro` / `local` / `worker` / `container` / `none` |
+
+Plugin **0.1.8** always sends `orchestrate: true` on `POST /v1/chat`. A missing field (curl, 0.1.7) stays cheap REST. `pyne_backend` is a named kind; the worker maps it to Pro (`pynescript.online`), local Flask, edge pyne-worker, or `pyne-api-container`.
 
 ## Standalone
 
@@ -38,10 +41,22 @@ AXIS + this worker alone is enough. pyne-worker is optional (validate loop only)
 Set `AXIS_MCP_URL` (+ `AXIS_MCP_KEY` secret) and the agent drives AXIS:
 
 | Layer | Tools | Needs |
-|-------|-------|-------|
-| Validate | `axis_run` via `axis_run_pine` / validate loop | MCP configured |
+|-------|-------|--------|
+| Validate | `axis_run` via `axis_run_pine` / staged validate | MCP configured |
 | Worker plane | `axis_control` → scripts, market, on-chain, health, usage | MCP configured |
-| App plane | `axis_app` → editor, chart, indicators, alerts, results, workspace, … | Bridged PWA tab (`bridge_connected > 0`) |
+| App plane | First-class wrappers + `axis_app` | Bridged PWA tab (`bridge_connected > 0`) |
 
-`axis_mcp_status` reports all three layers. The same surface is exposed on
-`/mcp` (`axis_mcp_*`, `axis_run_pine`, `axis_app_invoke`) for external IDEs.
+### First-class wrappers
+
+| Tool | Capability |
+|------|------------|
+| `axis_chart_load` | `chart.load` |
+| `axis_editor_set` | `editor.set` (`doc`) |
+| `axis_editor_run` | `editor.run` |
+| `axis_alerts_create` | `alerts.create` (AXIS dispatch fields only) |
+| `axis_results_get` | `results.get` (snapshot includes strategy stats) |
+| `axis_engine_tick` | `engine.tick` |
+
+`axis_run_pine` takes **only** Pine source (worker supplies synthetic bars). Do not pass ticker or timeframe. Escape hatches: `axis_control`, `axis_app`.
+
+`axis_mcp_status` reports wiring + `bridge_connected`. The same surface is on `/mcp` (additive wrappers; `rag_search` aliases knowledge search; **no** `subagent_spawn` on MCP).

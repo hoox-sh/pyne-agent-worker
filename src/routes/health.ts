@@ -4,10 +4,34 @@
 import { json } from "../lib/json";
 import { DISCLAIMER_SHORT, MARKS } from "../lib/legal";
 import { SERVICE_VERSION } from "../lib/version";
-import { chatFallbackModel, chatModel, embedModel } from "../ai/models";
+import { embedModel } from "../ai/models";
+import {
+  activeEmbedIdentity,
+  effectiveChatFallback,
+  effectiveChatModel,
+  embedIdentityV1,
+  envReasoningEffort,
+  featureFlag,
+  featureGlm53,
+  featureKb384,
+  featurePyneAst,
+  featureSubagents,
+} from "../ai/routing";
 import { isValidateAvailable } from "../lib/pyne-worker";
 import { isAxisMcpConfigured } from "../axis/mcp-client";
-import { isAnyValidateAvailable } from "../rag/validate-loop";
+import {
+  isAnyValidateAvailable,
+  parseValidateStages,
+} from "../rag/validate-loop";
+import {
+  anyPyneEvalConfigured,
+  inventoryPyneBackends,
+  workerHostConfigured,
+} from "../lib/pyne-backend";
+import {
+  concurrencyFromEnv,
+  maxSpecialistsFromEnv,
+} from "../agent/subagents/quota";
 
 /**
  * Health for standalone + HOOX modes.
@@ -19,6 +43,7 @@ export async function handleHealth(env: Env): Promise<Response> {
   const checks: Record<string, string> = {
     ai: env.AI ? "ok" : "missing",
     vectorize: env.VECTORIZE ? "ok" : "optional_missing",
+    vectorize_v2: env.VECTORIZE_V2 ? "ok" : "optional_not_configured",
     ai_search: env.AI_SEARCH ? "ok" : "optional_missing",
     r2: env.KB ? "ok" : "optional_missing",
     d1: env.DB ? "ok" : "optional_missing",
@@ -42,7 +67,8 @@ export async function handleHealth(env: Env): Promise<Response> {
     }
   }
 
-  const mode = isValidateAvailable(env)
+  const pyneBackends = inventoryPyneBackends(env);
+  const mode = anyPyneEvalConfigured(env)
     ? "hoox"
     : isAxisMcpConfigured(env)
       ? "axis"
@@ -64,20 +90,48 @@ export async function handleHealth(env: Env): Promise<Response> {
         plugin: "GET /plugin/axis-pine-agent.js",
       },
       models: {
-        chat: chatModel(env),
-        fallback: chatFallbackModel(env),
+        chat: effectiveChatModel(env),
+        fallback: effectiveChatFallback(env),
         embed: embedModel(env),
+        reasoning_effort: envReasoningEffort(env),
         ai_gateway: (env.AI_GATEWAY_ID || "").trim() || null,
       },
+      features: {
+        glm53: featureGlm53(env),
+        subagents: featureSubagents(env),
+        pyne_ast: {
+          flag: featurePyneAst(env),
+          worker_bound: workerHostConfigured(env),
+        },
+        kb_384: featureKb384(env),
+        kb_fallback_v1: featureFlag(env, "KB_FALLBACK_V1"),
+      },
+      indexes: {
+        // Binding presence for v2 dims (feature flag gates *use*, not inventory).
+        v1: embedIdentityV1(env).dimensions,
+        v2: env.VECTORIZE_V2 ? 384 : "unbound",
+        active: activeEmbedIdentity(env).id,
+        active_model: activeEmbedIdentity(env).model,
+        active_pooling: activeEmbedIdentity(env).pooling,
+      },
+      subagents: {
+        enabled: featureSubagents(env),
+        max_specialists: maxSpecialistsFromEnv(env),
+        concurrency: concurrencyFromEnv(env),
+        note: "MCP never exposes subagent_spawn in 0.4.0",
+      },
+      pyne_backends: pyneBackends,
       validation: {
         // Requested by default, but auto-skipped when no backend is present.
         default: (env.VALIDATE_DEFAULT || "true").toLowerCase() !== "false",
         max_retries: Number(env.VALIDATE_MAX_RETRIES || "2"),
+        stages: parseValidateStages(env),
         available: isAnyValidateAvailable(env),
         pyne_worker: checks.pyne_worker,
         axis_mcp: checks.axis_mcp,
-        note: isValidateAvailable(env)
-          ? "generate → pyne-worker validate → retry enabled"
+        // No synchronous /ast/* probe — would block health on PYNE timeouts.
+        note: anyPyneEvalConfigured(env)
+          ? "generate → staged parse/lint/eval → retry enabled"
           : isAxisMcpConfigured(env)
             ? "generate → AXIS MCP axis_run validate → retry enabled"
             : "standalone: no validation backend configured; chat works without validate loop",

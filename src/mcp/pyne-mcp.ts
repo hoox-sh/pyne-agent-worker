@@ -21,14 +21,26 @@ import {
   axisMcpListTools,
   axisMcpStatus,
   axisRunPine,
+  isAxisMcpConfigured,
   isCallableAxisTool,
+  validateOnAxisMcp,
 } from "../axis/mcp-client";
 import { SERVICE_VERSION } from "../lib/version";
+import {
+  envPyneBackend,
+  validateOnSelectedBackend,
+} from "../lib/pyne-backend";
+import { pyneAstOp, pyneLintOrHeuristic } from "../lib/pyne-ast";
+import { syntheticBars } from "../lib/synthetic-bars";
 
 type McpState = Record<string, never>;
 
 function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
+}
+
+function textJson(value: unknown) {
+  return textResult(JSON.stringify(value));
 }
 
 export class PyneMcp extends McpAgent<Env, McpState, Record<string, never>> {
@@ -53,6 +65,24 @@ export class PyneMcp extends McpAgent<Env, McpState, Record<string, never>> {
       ],
     }));
 
+    const searchKb = async ({
+      query,
+      top_k,
+    }: {
+      query: string;
+      top_k?: number;
+    }) => {
+      const result = await searchKnowledge(this.env, query, top_k ?? 6);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `backend=${result.backend}\n\n${result.formatted}`,
+          },
+        ],
+      };
+    };
+
     this.server.registerTool(
       "search_knowledge_base",
       {
@@ -63,17 +93,21 @@ export class PyneMcp extends McpAgent<Env, McpState, Record<string, never>> {
           top_k: z.number().int().min(1).max(12).optional(),
         },
       },
-      async ({ query, top_k }) => {
-        const result = await searchKnowledge(this.env, query, top_k ?? 6);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `backend=${result.backend}\n\n${result.formatted}`,
-            },
-          ],
-        };
-      }
+      searchKb
+    );
+
+    // Alias kept for 0.4.0 vocabulary; do not remove search_knowledge_base.
+    this.server.registerTool(
+      "rag_search",
+      {
+        description:
+          "Alias of search_knowledge_base — hybrid Pine Script™ / PYNE knowledge search.",
+        inputSchema: {
+          query: z.string().min(2).max(500),
+          top_k: z.number().int().min(1).max(12).optional(),
+        },
+      },
+      searchKb
     );
 
     this.server.registerTool(
@@ -167,24 +201,22 @@ export class PyneMcp extends McpAgent<Env, McpState, Record<string, never>> {
       "axis_run_pine",
       {
         description:
-          "Lint + execute Pine Script™ on AXIS (worker plane, no PWA needed). Returns the real engine result.",
+          "Lint + execute Pine Script™ on AXIS (worker plane, no PWA needed). Worker supplies synthetic bars — do not pass ticker or timeframe.",
         inputSchema: {
           code: z.string().min(1).max(80_000),
-          symbol: z.string().max(24).optional(),
-          timeframe: z.string().max(8).optional(),
         },
       },
-      async ({ code, symbol, timeframe }) => {
+      async ({ code }) => {
         const lint = lintPine(code);
         if (!lint.ok) {
-          return textResult(
-            JSON.stringify({ ok: false, stage: "lint", summary: formatLintForModel(lint) })
-          );
+          return textJson({
+            ok: false,
+            stage: "lint",
+            summary: formatLintForModel(lint),
+          });
         }
-        const res = await axisRunPine(this.env, { script: lint.fixed, symbol, timeframe });
-        return textResult(
-          JSON.stringify(res.ok ? { ok: true, text: res.text } : res)
-        );
+        const res = await axisRunPine(this.env, { script: lint.fixed });
+        return textJson(res.ok ? { ok: true, text: res.text } : res);
       }
     );
 
@@ -192,7 +224,7 @@ export class PyneMcp extends McpAgent<Env, McpState, Record<string, never>> {
       "axis_app_invoke",
       {
         description:
-          "Drive the connected AXIS PWA (editor.*, chart.*, results.*, alerts.*, workspace.*, …). Needs a bridged tab.",
+          "Drive the connected AXIS PWA (editor.*, chart.*, results.*, alerts.*, workspace.*, …). Needs a bridged tab. Prefer first-class wrappers when they fit.",
         inputSchema: {
           capability: z.string().min(3).max(80),
           payload: z.record(z.string(), z.unknown()).optional(),
@@ -205,9 +237,256 @@ export class PyneMcp extends McpAgent<Env, McpState, Record<string, never>> {
           payload: payload ?? {},
           session,
         });
-        return textResult(
-          JSON.stringify(res.ok ? { ok: true, text: res.text } : res)
-        );
+        return textJson(res.ok ? { ok: true, text: res.text } : res);
+      }
+    );
+
+    this.server.registerTool(
+      "axis_chart_load",
+      {
+        description: "Load OHLCV on the bridged AXIS chart (app_invoke chart.load).",
+        inputSchema: {
+          symbol: z.string().min(1).max(32),
+          interval: z.string().max(12).optional(),
+          source: z.string().max(40).optional(),
+        },
+      },
+      async ({ symbol, interval, source }) => {
+        const payload: Record<string, unknown> = { symbol };
+        if (interval) payload.interval = interval;
+        if (source) payload.source = source;
+        const res = await axisApp(this.env, {
+          capability: "chart.load",
+          payload,
+        });
+        return textJson(res.ok ? { ok: true, text: res.text } : res);
+      }
+    );
+
+    this.server.registerTool(
+      "axis_editor_set",
+      {
+        description: "Set the AXIS editor document (app_invoke editor.set).",
+        inputSchema: {
+          doc: z.string().min(1).max(80_000),
+        },
+      },
+      async ({ doc }) => {
+        const res = await axisApp(this.env, {
+          capability: "editor.set",
+          payload: { doc },
+        });
+        return textJson(res.ok ? { ok: true, text: res.text } : res);
+      }
+    );
+
+    this.server.registerTool(
+      "axis_editor_run",
+      {
+        description: "Run the AXIS editor document (app_invoke editor.run).",
+        inputSchema: {},
+      },
+      async () => {
+        const res = await axisApp(this.env, {
+          capability: "editor.run",
+          payload: {},
+        });
+        return textJson(res.ok ? { ok: true, text: res.text } : res);
+      }
+    );
+
+    this.server.registerTool(
+      "axis_alerts_create",
+      {
+        description:
+          "Create an AXIS alert (app_invoke alerts.create). Fields: name, symbol, kind, params, interval, webhookUrl, enabled.",
+        inputSchema: {
+          name: z.string().min(1).max(80),
+          symbol: z.string().max(32).optional(),
+          kind: z.string().max(40).optional(),
+          params: z.record(z.string(), z.unknown()).optional(),
+          interval: z.string().max(12).optional(),
+          webhookUrl: z.string().max(500).optional(),
+          enabled: z.boolean().optional(),
+        },
+      },
+      async (input) => {
+        const params = input.params || {};
+        const capped: Record<string, unknown> = {};
+        let n = 0;
+        for (const [k, v] of Object.entries(params)) {
+          if (n >= 8) break;
+          capped[k] = v;
+          n += 1;
+        }
+        const payload: Record<string, unknown> = {
+          name: input.name,
+          kind: input.kind || "price_cross",
+          params: capped,
+        };
+        if (input.symbol) payload.symbol = input.symbol;
+        if (input.interval) payload.interval = input.interval;
+        if (input.webhookUrl) payload.webhookUrl = input.webhookUrl;
+        if (typeof input.enabled === "boolean") payload.enabled = input.enabled;
+        const res = await axisApp(this.env, {
+          capability: "alerts.create",
+          payload,
+        });
+        return textJson(res.ok ? { ok: true, text: res.text } : res);
+      }
+    );
+
+    this.server.registerTool(
+      "axis_results_get",
+      {
+        description:
+          "Last AXIS run snapshot including strategy stats (app_invoke results.get). No results.strategy tool.",
+        inputSchema: {},
+      },
+      async () => {
+        const res = await axisApp(this.env, {
+          capability: "results.get",
+          payload: {},
+        });
+        return textJson(res.ok ? { ok: true, text: res.text } : res);
+      }
+    );
+
+    this.server.registerTool(
+      "axis_engine_tick",
+      {
+        description:
+          "Force one AXIS engine tick (app_invoke engine.tick). Mutating — needs bridge_connected > 0.",
+        inputSchema: {},
+      },
+      async () => {
+        const res = await axisApp(this.env, {
+          capability: "engine.tick",
+          payload: {},
+        });
+        return textJson(res.ok ? { ok: true, text: res.text } : res);
+      }
+    );
+
+    const backendOpt = z
+      .enum(["auto", "pro", "local", "worker", "container", "none"])
+      .optional();
+
+    this.server.registerTool(
+      "pyne_parse",
+      {
+        description: "Parse Pine via PYNE /ast/parse or Flask /lsp/diagnostics.",
+        inputSchema: {
+          code: z.string().min(1).max(80_000),
+          backend: backendOpt,
+        },
+      },
+      async ({ code, backend }) =>
+        textJson(
+          await pyneAstOp(
+            this.env,
+            "parse",
+            code,
+            backend || envPyneBackend(this.env)
+          )
+        )
+    );
+
+    this.server.registerTool(
+      "pyne_lint",
+      {
+        description: "Lint Pine via PYNE language surface or heuristic fallback.",
+        inputSchema: {
+          code: z.string().min(1).max(80_000),
+          backend: backendOpt,
+        },
+      },
+      async ({ code, backend }) =>
+        textJson(
+          await pyneLintOrHeuristic(
+            this.env,
+            code,
+            backend || envPyneBackend(this.env)
+          )
+        )
+    );
+
+    this.server.registerTool(
+      "pyne_diagnostics",
+      {
+        description: "Parse + lint diagnostics via PYNE or Flask /lsp.",
+        inputSchema: {
+          code: z.string().min(1).max(80_000),
+          backend: backendOpt,
+        },
+      },
+      async ({ code, backend }) =>
+        textJson(
+          await pyneAstOp(
+            this.env,
+            "diagnostics",
+            code,
+            backend || envPyneBackend(this.env)
+          )
+        )
+    );
+
+    this.server.registerTool(
+      "pyne_compile",
+      {
+        description:
+          "Compile-check only (/ast/compile). Never returns Python IR. Skips until sister route exists.",
+        inputSchema: {
+          code: z.string().min(1).max(80_000),
+          backend: backendOpt,
+        },
+      },
+      async ({ code, backend }) =>
+        textJson(
+          await pyneAstOp(
+            this.env,
+            "compile",
+            code,
+            backend || envPyneBackend(this.env)
+          )
+        )
+    );
+
+    this.server.registerTool(
+      "pyne_eval",
+      {
+        description: "Evaluate Pine on the selected PYNE host /run (or AXIS axis_run).",
+        inputSchema: {
+          code: z.string().min(1).max(80_000),
+          mode: z.enum(["interpret", "compile", "auto"]).optional(),
+          backend: backendOpt,
+        },
+      },
+      async ({ code, mode, backend }) => {
+        const kind = backend || envPyneBackend(this.env);
+        const ohlcv = syntheticBars(64);
+        if (kind !== "none") {
+          const r = await validateOnSelectedBackend(
+            this.env,
+            { script: code, mode: mode || "interpret", ohlcv },
+            kind
+          );
+          if (!r.skipped || r.ok) return textJson(r);
+        }
+        if (isAxisMcpConfigured(this.env)) {
+          return textJson(
+            await validateOnAxisMcp(this.env, {
+              script: code,
+              mode: mode || "interpret",
+            })
+          );
+        }
+        return textJson({
+          ok: false,
+          skipped: true,
+          reason: "no PYNE eval backend configured",
+          latency_ms: 0,
+        });
       }
     );
   }

@@ -1,6 +1,6 @@
 {
   "name": "pyne-agent-worker",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Cloudflare® Agents SDK + Workers AI™ NL→PYNE (Pine Script™ v6) agent with Vectorize/AI Search RAG, MCP, and AXIS plugin.",
   "license": "AGPL-3.0-or-later",
@@ -55,6 +55,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^2",
     "@cloudflare/ai-chat": "^0.10.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "agents": "^0.20.1",

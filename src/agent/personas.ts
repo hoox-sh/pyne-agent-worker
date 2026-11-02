@@ -153,16 +153,33 @@ export function detectPersona(userText: string, explicit?: unknown): Exclude<Per
 /**
  * System-prompt section for a resolved (non-auto) persona.
  * Each stance composes only what it needs — no duplication walls.
+ *
+ * `includeAxisControl` defaults true (SDK). Cheap REST passes false unless
+ * looksActionable / orchestrate so we do not tell the model to "act" without tools.
  */
-export function personaSystemSection(persona: Exclude<PersonaId, "auto">): string {
+export function personaSystemSection(
+  persona: Exclude<PersonaId, "auto">,
+  opts?: { includeAxisControl?: boolean }
+): string {
+  const includeAxis = opts?.includeAxisControl !== false;
   const head = `## Active persona: ${PERSONAS[persona]!.label}`;
   switch (persona) {
-    case "axis":
-      return [head, buildAxisControlSection(), "", buildAxisOperatorSection()].join("\n");
-    case "trader":
-      return [head, buildTraderSection(), "", buildAxisControlSection()].join("\n");
-    case "pine":
-      return [head, buildTradingCraftSection(), "", buildAxisControlSection()].join("\n");
+    case "axis": {
+      const parts = [head];
+      if (includeAxis) parts.push(buildAxisControlSection(), "");
+      parts.push(buildAxisOperatorSection());
+      return parts.join("\n");
+    }
+    case "trader": {
+      const parts = [head, buildTraderSection()];
+      if (includeAxis) parts.push("", buildAxisControlSection());
+      return parts.join("\n");
+    }
+    case "pine": {
+      const parts = [head, buildTradingCraftSection()];
+      if (includeAxis) parts.push("", buildAxisControlSection());
+      return parts.join("\n");
+    }
   }
 }
 

@@ -47,13 +47,26 @@ function parseArgs(argv: string[]) {
   let embedEndpoint = "";
   let bucket = "pyne-agent-kb";
   let index = "pyne-agent-kb";
+  let embedModel = "@cf/baai/bge-base-en-v1.5";
+  let pooling = "mean";
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--dry-run") dry = true;
     else if (argv[i] === "--embed-endpoint") embedEndpoint = argv[++i] || "";
     else if (argv[i] === "--bucket") bucket = argv[++i] || bucket;
     else if (argv[i] === "--index") index = argv[++i] || index;
+    else if (argv[i] === "--embed-model") embedModel = argv[++i] || embedModel;
+    else if (argv[i] === "--pooling") pooling = argv[++i] || pooling;
   }
-  return { dry, embedEndpoint, bucket, index };
+  // Convenience aliases for the 384-d cutover
+  if (index === "v2" || index === "pyne-agent-kb-384") {
+    index = "pyne-agent-kb-384";
+    if (embedModel === "@cf/baai/bge-base-en-v1.5") {
+      embedModel = "@cf/baai/bge-small-en-v1.5";
+    }
+    if (pooling === "mean") pooling = "cls";
+  }
+  if (index === "v1") index = "pyne-agent-kb";
+  return { dry, embedEndpoint, bucket, index, embedModel, pooling };
 }
 
 async function collectChunks(): Promise<ChunkFile[]> {
@@ -84,12 +97,21 @@ async function collectChunks(): Promise<ChunkFile[]> {
 
 async function embedBatch(
   endpoint: string,
-  texts: string[]
+  texts: string[],
+  opts: { index: string; pooling: string; embedModel: string }
 ): Promise<number[][]> {
+  const index =
+    opts.index.includes("384") || opts.index === "v2" ? "v2" : "v1";
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ texts }),
+    body: JSON.stringify({
+      texts,
+      index,
+      pooling: opts.pooling,
+      // model is resolved server-side from index identity; kept for logs
+      model: opts.embedModel,
+    }),
   });
   if (!res.ok) throw new Error(`embed endpoint HTTP ${res.status}`);
   const data = (await res.json()) as { vectors?: number[][]; data?: number[][] };
@@ -154,7 +176,12 @@ async function main() {
       const batch = chunks.slice(i, i + batchSize);
       const vectors = await embedBatch(
         args.embedEndpoint,
-        batch.map((c) => c.text.slice(0, 6000))
+        batch.map((c) => c.text.slice(0, 6000)),
+        {
+          index: args.index,
+          pooling: args.pooling,
+          embedModel: args.embedModel,
+        }
       );
       for (let j = 0; j < batch.length; j++) {
         const c = batch[j];

@@ -4,7 +4,7 @@
 > backed by an optional private **Vectorize™** knowledge base. **AXIS** sister plugin.
 > (Targets the Pine Script™ language; not a TradingView® product.)
 
-**Version:** 0.3.0 · **Runtime:** Cloudflare Workers (TypeScript) · **License:** AGPL-3.0-or-later
+**Version:** 0.4.0 · **Runtime:** Cloudflare Workers (TypeScript) · **License:** AGPL-3.0-or-later
 
 _Pine Script™ and TradingView® are trademarks of TradingView, Inc.  
 Cloudflare® is a registered trademark of Cloudflare, Inc.  
@@ -69,14 +69,17 @@ Knowledge is **operator-ingested** into private R2 + Vectorize only:
 
 ## Features
 
-- **POST `/v1/chat`** — NL → PYNE scripts with RAG context (**standalone OK**)
-- **Optional generate → validate → retry** — only when **pyne-worker** is configured (`POST /run` with synthetic bars); otherwise skipped automatically
-- **GET/POST `/v1/search`** — Vectorize search (no-op empty if KB not set up)
+- **POST `/v1/chat`** — NL → PYNE scripts with RAG (**standalone OK**). Plugin 0.1.8 sends `orchestrate: true` + `pyne_backend`
+- **Named PYNE backends** — `auto` / `pro` / `local` / `worker` / `container` / `none`
+- **Staged validate** — parse → lint → eval when a host is configured; otherwise skipped
+- **Grandmaster prompts** — `tools: none|axis|full` shared by REST + SDK
+- **AXIS wrappers** — chart/editor/alerts/results/engine + escape hatches
+- **Sub-agents** — optional (`FEATURE_SUBAGENTS`); per-request quota; not on MCP
+- **GET/POST `/v1/search`** — Vectorize (`index=v1|v2`); empty if KB not set up
 - **Sessions** — optional D1 history (`/v1/sessions`)
-- **AXIS plugin** — `GET /plugin/axis-pine-agent.js` (`kind: component` + floating UI fallback)
-- **Static chat shell** — `GET /` for demos / iframe
+- **AXIS plugin** — `GET /plugin/axis-pine-agent.js` · preview `GET /plugin-preview.html`
 - **Admin index** — `POST /v1/admin/embed` + `/v1/admin/index` (requires `API_KEY`)
-- **Product name:** **PYNE Agent** (not “Pine Script Agent”); legal marks appear only in disclaimers
+- **Product name:** **PYNE Agent**; legal marks appear in disclaimers
 
 ## Quick start (standalone)
 
@@ -280,6 +283,16 @@ remove, settings outside basics) ask first; everything else just happens.
 | `PYNE_SERVICE` | **Optional** service binding → `pyne-worker` (off by default) |
 | `PYNE_WORKER_URL` | **Optional** HTTP evaluate host |
 | `PYNE_WORKER_API_KEY` | **Optional** secret for HTTP pyne-worker |
+| `PYNE_BACKEND` | Named host: `auto` / `pro` / `local` / `worker` / `container` / `none` |
+| `PYNE_PRO_URL` / `PYNE_PRO_API_KEY` | Flask Pro (`pynescript.online`, `pyn_…` Bearer) |
+| `PYNE_LOCAL_URL` | Local Flask (`http://127.0.0.1:5002`). Needs `PYNE_ALLOW_PRIVATE_URLS=true` in wrangler dev |
+| `PYNE_CONTAINER_URL` | Cloudflare Container (`pyne-api-container`) |
+| `FEATURE_GLM53` | `false` in git. When `true`, allowlist injects GLM/Kimi and promotes default Qwen → `@cf/zai-org/glm-5.3` |
+| `FEATURE_SUBAGENTS` / `FEATURE_PYNE_AST` / `FEATURE_KB_384` | Off in git until opted in |
+| `VECTORIZE_V2` | Optional 384-d index (`pyne-agent-kb-384`, `pooling: cls`). Commented in wrangler until created |
+| `KB_FALLBACK_V1` | When V2 is empty/errors, re-embed with 768-d and query V1 (`false` in git) |
+| `CUSTOM_MODEL_ENDPOINT` | Operator BYOM OpenAI-compatible URL (request URLs rejected) |
+| `REASONING_EFFORT` | Default `high` for GLM/Kimi families |
 | `VALIDATE_DEFAULT` | Prefer validate when available (`true` / `false`) |
 | `VALIDATE_MAX_RETRIES` | Extra fix attempts (default `2`) |
 | `AXIS_MCP_URL` | AXIS MCP endpoint for deep app control (default `https://worker.axis.hoox.sh/mcp`) |

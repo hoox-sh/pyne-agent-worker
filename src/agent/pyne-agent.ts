@@ -18,10 +18,12 @@ import {
   type GenerateTextOnFinishCallback,
   type ToolSet,
 } from "ai";
-import { createAgentTools } from "./tools";
 import { buildAgentSystemPrompt, looksOffTopic } from "./prompts-v6";
 import { normalizePersona, type PersonaId } from "./personas";
 import { resolveChatModel } from "./gateway";
+import { featureSubagents, isRetryableModelError } from "../ai/routing";
+import { createOrchestratorTools } from "./orchestrator";
+import { maxSpecialistsFromEnv } from "./subagents/quota";
 
 export type PyneAgentState = {
   pineVersion: "v5" | "v6" | "auto";
@@ -93,7 +95,13 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
       turnCount: (this.state.turnCount || 0) + 1,
     });
 
-    const tools = createAgentTools(this.env);
+    const allowSpawn = featureSubagents(this.env);
+    const bundle = createOrchestratorTools(this.env, {
+      catalog: "full",
+      allowSpawn,
+      maxSubagents: maxSpecialistsFromEnv(this.env),
+    });
+    const tools = bundle.tools;
     const system = buildAgentSystemPrompt({
       pineVersion: this.state.pineVersion,
       style: this.state.style,
@@ -102,7 +110,7 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
     });
 
     const run = async (useFallback: boolean) => {
-      const { model, modelId } = resolveChatModel(this.env, {
+      const { model, modelId, providerOptions } = resolveChatModel(this.env, {
         fallback: useFallback,
       });
       const result = streamText({
@@ -110,8 +118,9 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
         system,
         messages: await convertToModelMessages(this.messages),
         tools,
-        // Allow tool → model → tool loops: search + lint + AXIS run/fix cycles
-        stopWhen: stepCountIs(8),
+        ...(providerOptions ? { providerOptions } : {}),
+        // Allow tool → model → tool loops; spawn raises the step budget.
+        stopWhen: stepCountIs(allowSpawn ? 12 : 8),
         maxRetries: 1,
         abortSignal: options?.abortSignal,
         onError: ({ error }) => {
@@ -147,7 +156,7 @@ export class PyneAgent extends AIChatAgent<Env, PyneAgentState> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       // Model timeout / overload → smaller fallback once
-      if (/timeout|overloaded|capacity|503|429/i.test(msg)) {
+      if (isRetryableModelError(msg, { source: "workers-ai" })) {
         try {
           return await run(true);
         } catch (err2) {

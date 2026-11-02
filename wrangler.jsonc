@@ -40,11 +40,14 @@
 
   // Vectorize™ index for Pine Script™ knowledge RAG (BYO embeddings fallback)
   //   npx wrangler vectorize create pyne-agent-kb --dimensions=768 --metric=cosine
+  // 384-d cutover (PR 7): create then uncomment — binding a missing index fails deploy.
+  //   npx wrangler vectorize create pyne-agent-kb-384 --dimensions=384 --metric=cosine
   "vectorize": [
     {
       "binding": "VECTORIZE",
       "index_name": "pyne-agent-kb"
     }
+    // { "binding": "VECTORIZE_V2", "index_name": "pyne-agent-kb-384" }
   ],
 
   // R2: raw knowledge documents (docs / corpus chunks / operator builtins).
@@ -114,7 +117,7 @@
 
   "vars": {
     "SERVICE_NAME": "pyne-agent-worker",
-    "SERVICE_VERSION": "0.3.0",
+    "SERVICE_VERSION": "0.4.0",
     "CHAT_MODEL": "@cf/qwen/qwen2.5-coder-32b-instruct",
     // Faster/smaller fallback when primary times out
     "CHAT_MODEL_FALLBACK": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
@@ -124,6 +127,24 @@
     "ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081,http://localhost:5173,http://127.0.0.1:5173,https://axis.hoox.sh,https://hoox.sh,https://pynescript.ai,https://pynescript.online,https://pynescript-axis.pages.dev",
     "VALIDATE_DEFAULT": "true",
     "VALIDATE_MAX_RETRIES": "2",
+    "PYNE_BACKEND": "auto",
+    "PYNE_PRO_URL": "https://pynescript.online",
+    "PYNE_LOCAL_URL": "http://127.0.0.1:5002",
+    "PYNE_ALLOW_PRIVATE_URLS": "false",
+    "FEATURE_GLM53": "false",
+    "FEATURE_SUBAGENTS": "false",
+    "FEATURE_PYNE_AST": "false",
+    "FEATURE_KB_384": "false",
+    "KB_FALLBACK_V1": "false",
+    "FEATURE_RERANK": "false",
+    "EMBED_MODEL_V2": "@cf/baai/bge-small-en-v1.5",
+    "EMBED_POOLING": "mean",
+    "EMBED_POOLING_V2": "cls",
+    "CHAT_MODELS": "",
+    "REASONING_EFFORT": "high",
+    "VALIDATE_STAGES": "parse,lint,eval",
+    "MAX_SUBAGENTS": "6",
+    "SUBAGENT_CONCURRENCY": "3",
     // AXIS MCP endpoint for deep app control (run, chart, editor, results…).
     // Production default; point at local AXIS Worker when developing.
     "AXIS_MCP_URL": "https://worker.axis.hoox.sh/mcp",
@@ -141,6 +162,9 @@
   //   API_KEY — shared secret for HTTP auth (X-API-Key / Authorization: Bearer)
   //   AXIS_MCP_KEY — Bearer for the AXIS MCP endpoint (falls back to API_KEY)
   //   PYNE_WORKER_API_KEY — optional; only for HTTP pyne-worker validate loop
+  //   PYNE_PRO_API_KEY — pyn_… Bearer for pynescript.online
+  //   PYNE_LOCAL_API_KEY / PYNE_CONTAINER_API_KEY — optional Flask keys
+  //   CUSTOM_MODEL_API_KEY — BYOM OpenAI-compatible endpoint key
   //   HX_ALLOW_SELFHOST — optional fail-open: set equal to API_KEY so console
   //     verify outages degrade (X-Hoox-Verify: degraded) instead of 503
 }

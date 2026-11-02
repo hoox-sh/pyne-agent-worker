@@ -252,8 +252,6 @@ describe("validate via AXIS", () => {
     try {
       await axisRunPine(ENV, {
         script: "//@version=6\nindicator('x')\nplot(close)",
-        symbol: "BTCUSDT",
-        timeframe: "1h",
       });
       const payload = args as Record<string, unknown> | null;
       expect(payload).toBeTruthy();
@@ -453,6 +451,97 @@ describe("validate via AXIS", () => {
       expect(out.validated).toBe(true);
       expect(out.validation?.backend).toBe("axis-mcp");
       expect(out.retries).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("first-class AXIS wrappers", () => {
+  test("createAgentTools exposes wrappers and axis_run_pine has no symbol/timeframe", async () => {
+    const { createAgentTools } = await import("../src/agent/tools");
+    const tools = createAgentTools(ENV);
+    expect(tools).toHaveProperty("axis_chart_load");
+    expect(tools).toHaveProperty("axis_editor_set");
+    expect(tools).toHaveProperty("axis_editor_run");
+    expect(tools).toHaveProperty("axis_alerts_create");
+    expect(tools).toHaveProperty("axis_results_get");
+    expect(tools).toHaveProperty("axis_engine_tick");
+    const shape = tools.axis_run_pine as { inputSchema?: { shape?: Record<string, unknown> } };
+    const keys = Object.keys(shape.inputSchema?.shape || {});
+    expect(keys).toContain("code");
+    expect(keys).not.toContain("symbol");
+    expect(keys).not.toContain("timeframe");
+  });
+
+  test("axis_chart_load invokes app_invoke chart.load", async () => {
+    const { createAxisTools } = await import("../src/agent/tools-axis");
+    const cap = { capability: "", payload: {} as Record<string, unknown> };
+    const restore = mockFetch((_url, init) => {
+      const rpc = JSON.parse(String(init?.body || "{}")) as {
+        params?: { name?: string; arguments?: Record<string, unknown> };
+      };
+      if (rpc.params?.name === "app_invoke") {
+        cap.capability = String(rpc.params.arguments?.capability || "");
+        cap.payload =
+          (rpc.params.arguments?.payload as Record<string, unknown>) || {};
+      }
+      return rpcOk({
+        content: [{ type: "text", text: '{"ok":true}' }],
+        structuredContent: { ok: true },
+      });
+    });
+    try {
+      const tools = createAxisTools(ENV);
+      const exec = tools.axis_chart_load.execute as unknown as (
+        args: { symbol: string; interval?: string },
+        opts?: unknown
+      ) => Promise<{ ok: boolean }>;
+      const out = await exec({ symbol: "BTCUSDT", interval: "1h" });
+      expect(out.ok).toBe(true);
+      expect(cap.capability).toBe("chart.load");
+      expect(cap.payload).toEqual({ symbol: "BTCUSDT", interval: "1h" });
+    } finally {
+      restore();
+    }
+  });
+
+  test("axis_alerts_create matches AXIS dispatch fields", async () => {
+    const { createAxisTools } = await import("../src/agent/tools-axis");
+    const cap = { payload: {} as Record<string, unknown> };
+    const restore = mockFetch((_url, init) => {
+      const rpc = JSON.parse(String(init?.body || "{}")) as {
+        params?: { name?: string; arguments?: Record<string, unknown> };
+      };
+      if (rpc.params?.name === "app_invoke") {
+        cap.payload =
+          (rpc.params.arguments?.payload as Record<string, unknown>) || {};
+      }
+      return rpcOk({
+        content: [{ type: "text", text: '{"ok":true}' }],
+        structuredContent: { ok: true },
+      });
+    });
+    try {
+      const tools = createAxisTools(ENV);
+      const exec = tools.axis_alerts_create.execute as unknown as (
+        args: {
+          name: string;
+          kind?: string;
+          params?: Record<string, unknown>;
+        },
+        opts?: unknown
+      ) => Promise<{ ok: boolean }>;
+      await exec({
+        name: "Cross",
+        kind: "price_cross",
+        params: { level: 100, a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 },
+      });
+      expect(cap.payload.name).toBe("Cross");
+      expect(cap.payload.kind).toBe("price_cross");
+      expect(cap.payload).not.toHaveProperty("condition");
+      expect(cap.payload).not.toHaveProperty("message");
+      expect(Object.keys(cap.payload.params as object).length).toBe(8);
     } finally {
       restore();
     }
