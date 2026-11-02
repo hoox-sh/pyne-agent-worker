@@ -54,7 +54,7 @@
         color: var(--color-text);
       }
       .stage {
-        min-height: 100%;
+        height: 100%;
         display: grid;
         grid-template-rows: auto 1fr;
       }
@@ -73,13 +73,41 @@
         border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer;
       }
       .desk {
-        position: relative;
-        padding: 24px;
+        display: flex;
+        justify-content: flex-end;
+        min-height: 0;
+        height: 100%;
+        padding: 12px;
+      }
+      .shell {
+        display: flex;
+        flex-direction: column;
+        width: min(380px, 100%);
+        height: 100%;
+        min-height: 0;
+        background: var(--color-bg-panel);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-panel);
+        overflow: hidden;
+      }
+      .shell-title {
+        flex-shrink: 0;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: var(--color-bg-elev);
+        border-bottom: 1px solid var(--color-border-soft);
       }
       #panel {
-        width: min(440px, 100%);
-        height: min(560px, calc(100vh - 96px));
-        margin-left: auto;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
       }
     </style>
   </head>
@@ -87,20 +115,22 @@
     <div class="stage">
       <header class="chrome">
         <div>
-          <h1>AXIS void · PYNE Agent 0.1.8</h1>
-          <p>Plugin preview — mock /v1/chat, live config chips, orchestrate + backend</p>
+          <h1>AXIS void · PYNE Agent 0.1.9</h1>
+          <p>Panel preview — mock /v1/chat, live config chips, orchestrate + backend</p>
         </div>
         <div class="chrome-actions">
           <button type="button" id="theme">Toggle theme</button>
-          <button type="button" id="float">Open float</button>
         </div>
       </header>
       <div class="desk">
-        <div id="panel"></div>
+        <div class="shell">
+          <div class="shell-title">Agent</div>
+          <div id="panel"></div>
+        </div>
       </div>
     </div>
     <script type="module">
-      import { mountChat, openFloatingModal, buildChatBody } from "./plugin/axis-pine-agent.js";
+      import { mountChat, buildChatBody } from "./plugin/axis-pine-agent.js";
 
       const state = {
         endpoint: "https://pyne-agent-worker.example.workers.dev",
@@ -160,9 +190,6 @@ hline(30)`;
         const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
         document.documentElement.setAttribute("data-theme", next === "light" ? "light" : "");
         if (next === "dark") document.documentElement.removeAttribute("data-theme");
-      });
-      document.getElementById("float").addEventListener("click", () => {
-        openFloatingModal(api, state);
       });
       window.__buildChatBody = buildChatBody;
     </script>

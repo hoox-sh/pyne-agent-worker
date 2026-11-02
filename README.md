@@ -64,12 +64,13 @@ Knowledge is **operator-ingested** into private R2 + Vectorize only:
 | Open corpus (≤ 1000 scripts) | `ingest:corpus` | No |
 | Built-in references | `ingest:builtins` | No |
 | HOOX `.pine.example` templates | `knowledge/templates/` | Yes (examples only) |
+| Trading bibliothek files | `bibliothek:download` | No (catalog CSV only) |
 
 `scripts/legal-check.sh` runs on `predeploy` and refuses tracked `*.pine` files.
 
 ## Features
 
-- **POST `/v1/chat`** — NL → PYNE scripts with RAG (**standalone OK**). Plugin 0.1.8 sends `orchestrate: true` + `pyne_backend`
+- **POST `/v1/chat`** — NL → PYNE scripts with RAG (**standalone OK**). Plugin 0.1.9 sends `orchestrate: true` + `pyne_backend`
 - **Named PYNE backends** — `auto` / `pro` / `local` / `worker` / `container` / `none`
 - **Staged validate** — parse → lint → eval when a host is configured; otherwise skipped
 - **Grandmaster prompts** — `tools: none|axis|full` shared by REST + SDK
@@ -319,6 +320,7 @@ Standalone deploy: leave `PYNE_*` unset. Do not add a `services` binding to a wo
 | `legal-check` | refuse tracked Pine / missing marks |
 | `ingest:docs` / `ingest:corpus` / `ingest:builtins` | stage KB chunks |
 | `ingest:index` | R2 + Vectorize pipeline |
+| `bibliothek` | validate, download, extract, or export the trading shelf (`scripts/bibliothek/`) |
 
 ## License
 

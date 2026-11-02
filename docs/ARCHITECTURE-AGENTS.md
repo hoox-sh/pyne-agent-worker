@@ -1,6 +1,6 @@
 # PYNE Agent — Grandmaster edge architecture
 
-Service version **0.4.0** (worker). Plugin **0.1.8**. Grandmaster capabilities ship behind feature flags; git defaults stay Free-plan safe until operators opt in.
+Service version **0.4.0** (worker). Plugin **0.1.9**. Grandmaster capabilities ship behind feature flags; git defaults stay Free-plan safe until operators opt in.
 
 _Pine Script™ and TradingView® are trademarks of TradingView, Inc.  
 Cloudflare® is a registered trademark of Cloudflare, Inc._
@@ -14,7 +14,7 @@ Stateful **NL → Pine Script™ v6** agent on Cloudflare Workers:
 | **Agents SDK chat** | `/agents/pyne-agent/:session` | Durable Object SQLite (`AIChatAgent`) |
 | **MCP tools** | `/mcp` | Durable Object (`McpAgent`) |
 | **REST** | `POST /v1/chat` | Optional D1 |
-| **AXIS plugin** | `/plugin/axis-pine-agent.js` | Client UI (0.1.8 always `orchestrate: true`) |
+| **AXIS plugin** | `/plugin/axis-pine-agent.js` | Agent panel UI (0.1.9 always `orchestrate: true`) |
 
 Standalone-first: **Workers AI only** is enough. AI Search, Vectorize, R2, D1, PYNE hosts, AXIS MCP, AI Gateway are optional.
 
@@ -49,7 +49,7 @@ Standalone-first: **Workers AI only** is enough. AI Search, Vectorize, R2, D1, P
 |---------|------------|------|
 | Missing `orchestrate` (curl / plugin 0.1.7) | `none` | Generate + **server-side** staged parse→lint→eval |
 | `looksActionable` + AXIS MCP | `axis` | ≤4 steps, AXIS tools only (no `pyne_*`, no spawn) |
-| `orchestrate: true` (plugin 0.1.8) | `full` | ≤8–12 steps; spawn if `FEATURE_SUBAGENTS` |
+| `orchestrate: true` (plugin 0.1.9) | `full` | ≤8–12 steps; spawn if `FEATURE_SUBAGENTS` |
 
 Compute actionable / orchestrate **before** `buildSystemPrompt` so Grandmaster prose matches the tool catalog.
 

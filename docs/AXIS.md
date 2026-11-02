@@ -30,7 +30,9 @@ Module path in this repo: `plugin/axis-pine-agent.js` (also served from `public/
 | `persona` | no | `auto` / `pine` / `axis` / `trader` |
 | `pyneBackend` | no | `auto` / `pro` / `local` / `worker` / `container` / `none` |
 
-Plugin **0.1.8** always sends `orchestrate: true` on `POST /v1/chat`. A missing field (curl, 0.1.7) stays cheap REST. `pyne_backend` is a named kind; the worker maps it to Pro (`pynescript.online`), local Flask, edge pyne-worker, or `pyne-api-container`.
+Plugin **0.1.9** always sends `orchestrate: true` on `POST /v1/chat`. A missing field (curl, 0.1.7) stays cheap REST. `pyne_backend` is a named kind; the worker maps it to Pro (`pynescript.online`), local Flask, edge pyne-worker, or `pyne-api-container`.
+
+The chat is the AXIS **Agent** panel (`slots: ["panel"]`). AXIS owns the panel title, dock, and close. The plugin fills the panel body.
 
 ## Standalone
 

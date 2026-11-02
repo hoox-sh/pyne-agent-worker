@@ -22,14 +22,14 @@ https://<your-worker>.workers.dev/plugin/axis-pine-agent.js
 | `persona` | `auto` \| `pine` \| `axis` \| `trader` |
 | `pyneBackend` | `auto` \| `pro` \| `local` \| `worker` \| `container` \| `none` — parse/lint/eval host (kind, not a URL) |
 
-Chat always sends `orchestrate: true` (plugin 0.1.8). Curl / plugin 0.1.7 omit the field and stay on cheap REST.
+Chat always sends `orchestrate: true` (plugin 0.1.9). Curl / plugin 0.1.7 omit the field and stay on cheap REST.
 
 ## Contract
 
 - **kind:** `component`
-- **slots:** `manager-tab`, `topbar-action`, `settings-section`
-- **Fallback:** compact accent **Agent** launcher (bottom-right above editor bottom bars) if AXIS has not mounted component slots yet; free-floating chat modal with close + resize (not a dock panel)
-- **Preview:** open `/plugin-preview.html` on the worker (AXIS void tokens, mock chat) to inspect 0.1.8 chrome without a live PWA tab
+- **slots:** `panel`
+- **UI:** AXIS Agent dock panel. The chat fills the panel body. The panel title and close belong to AXIS. Closing the panel aborts an in-flight chat.
+- **Preview:** open `/plugin-preview.html` on the worker (AXIS void tokens, mock chat) to inspect 0.1.9 chrome without a live PWA tab
 
 If your AXIS build’s dynamic loader still rejects `kind: 'component'`, use the
 Worker’s built-in chat UI (`https://<worker>/`) or register the module from a

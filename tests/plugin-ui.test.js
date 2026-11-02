@@ -26,14 +26,16 @@ describe("plugin contract", () => {
   test("live getConfig wins over the mount snapshot", () => {
     const src = readFileSync(pluginPath, "utf8");
     expect(src).toContain("cfg({ ...(config || {}), ...(api?.getConfig?.() || {}) })");
-    expect(src).toContain("bootstrapFloating(ctx)");
+    expect(src).toContain('slots: ["panel"]');
+    expect(src).not.toContain("bootstrapFloating");
+    expect(src).not.toContain("pyne-agent-launch");
     expect(src).toContain("api?.getConfig?.() || {}");
-    expect(src).toContain('version: "0.1.8"');
-    expect(src).toContain('const PLUGIN_UI_VERSION = "0.1.8"');
+    expect(src).toContain('version: "0.1.9"');
+    expect(src).toContain('const PLUGIN_UI_VERSION = "0.1.9"');
     expect(src).toContain("orchestrate: true");
     expect(src).toContain("pyne_backend: live.pyneBackend");
     expect(src).toContain('options: ["auto", "pro", "local", "worker", "container", "none"]');
-    expect(PLUGIN_UI_VERSION).toBe("0.1.8");
+    expect(PLUGIN_UI_VERSION).toBe("0.1.9");
   });
 });
 
@@ -164,7 +166,7 @@ describe("editor delivery", () => {
 });
 
 describe("chat body", () => {
-  test("0.1.8 always orchestrates and sends a backend kind", () => {
+  test("plugin UI always orchestrates and sends a backend kind", () => {
     const live = cfg({
       endpoint: "https://agent.example",
       persona: "axis",

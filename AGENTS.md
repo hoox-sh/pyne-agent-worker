@@ -10,7 +10,7 @@ and a Vectorize™ RAG knowledge base. Ships an AXIS plugin. Sister of pyne-work
 
 Service **0.4.0** (Grandmaster edition). Capabilities (GLM routing, PYNE backends,
 staged validate, AXIS wrappers, sub-agents, 384-d KB) ship **behind feature flags**.
-Git defaults stay on Qwen 32B / 768-d / no spawn until operators opt in. Plugin is **0.1.8**.
+Git defaults stay on Qwen 32B / 768-d / no spawn until operators opt in. Plugin is **0.1.9**.
 
 ## Non-negotiables
 
