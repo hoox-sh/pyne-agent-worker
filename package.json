@@ -30,7 +30,7 @@
     "start": "wrangler dev",
     "deploy": "wrangler deploy",
     "types": "wrangler types",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check --no-script",
     "test": "bun test tests/",
     "test:watch": "bun test --watch tests/",
     "legal-check": "bash scripts/legal-check.sh",
