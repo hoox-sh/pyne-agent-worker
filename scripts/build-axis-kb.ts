@@ -246,6 +246,7 @@ async function main() {
         "Place the pack, or clone the sister repo next to this worker."
     );
     process.exit(2);
+    return;
   }
 
   await mkdir(dirname(OUT), { recursive: true });

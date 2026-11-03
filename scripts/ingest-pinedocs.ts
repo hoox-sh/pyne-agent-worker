@@ -55,6 +55,7 @@ async function main() {
         "Pine Script™ / TradingView® marks belong to TradingView, Inc."
     );
     process.exit(2);
+    return;
   }
 
   let data: PineDocsFile;
@@ -64,6 +65,7 @@ async function main() {
     console.error(`Invalid JSON: ${file}`);
     console.error(e);
     process.exit(2);
+    return;
   }
 
   const entries = iterPineDocEntries(data);
