@@ -43,7 +43,11 @@ function parseArgs(argv: string[]) {
 }
 
 async function main() {
-  const { file, version, kind: kindOverride } = parseArgs(process.argv.slice(2));
+  const {
+    file,
+    version,
+    kind: kindOverride,
+  } = parseArgs(process.argv.slice(2));
   let raw: string;
   try {
     raw = await readFile(file, "utf8");
@@ -52,7 +56,7 @@ async function main() {
       `Missing pineDocs.json at ${file}\n` +
         "Place an operator-private language reference there (gitignored),\n" +
         "then re-run: bun run ingest:pinedocs\n" +
-        "Pine Script™ / TradingView® marks belong to TradingView, Inc."
+        "Pine Script™ / TradingView® marks belong to TradingView, Inc.",
     );
     process.exit(2);
     return;
@@ -81,7 +85,7 @@ async function main() {
     ROOT,
     "knowledge",
     "data",
-    kind === "docs-axis" ? "axis" : "docs"
+    kind === "docs-axis" ? "axis" : "docs",
   );
   await mkdir(OUT, { recursive: true });
   const manifest: unknown[] = [];
@@ -114,10 +118,16 @@ async function main() {
             },
           },
           null,
-          2
-        )
+          2,
+        ),
       );
-      manifest.push({ id: c.id, file: outPath, kind: c.kind, title: c.title, section });
+      manifest.push({
+        id: c.id,
+        file: outPath,
+        kind: c.kind,
+        title: c.title,
+        section,
+      });
       chunks += 1;
     }
   }
@@ -137,11 +147,13 @@ async function main() {
         items: manifest,
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 
-  console.log(`Staged ${chunks} chunks from ${entries.length} pineDocs entries → ${OUT}`);
+  console.log(
+    `Staged ${chunks} chunks from ${entries.length} pineDocs entries → ${OUT}`,
+  );
   console.log("Next: bun run ingest:index");
 }
 

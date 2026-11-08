@@ -35,7 +35,10 @@ async function* walk(dir: string): AsyncGenerator<string> {
     if (e.isDirectory()) {
       if (e.name === "node_modules" || e.name === ".git") continue;
       yield* walk(p);
-    } else if (e.isFile() && [".md", ".mdx"].includes(extname(e.name).toLowerCase())) {
+    } else if (
+      e.isFile() &&
+      [".md", ".mdx"].includes(extname(e.name).toLowerCase())
+    ) {
       if (e.name === "llm.txt" || e.name === "llms.txt") continue;
       yield p;
     }
@@ -49,7 +52,11 @@ function stripLicense(text: string): string {
     .trim();
 }
 
-function parseFrontmatter(raw: string): { title?: string; description?: string; body: string } {
+function parseFrontmatter(raw: string): {
+  title?: string;
+  description?: string;
+  body: string;
+} {
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!m) return { body: raw };
   const fm = m[1] || "";
@@ -106,7 +113,8 @@ const SURFACE: Entry[] = [
     desc:
       "Every AXIS plugin shares PluginBase (id, name, kind, description, version, builtIn, configSchema, capabilities, init/dispose). " +
       "pluginKey(kind, id) → `${kind}:${id}` for store.pluginsConfig.",
-    syntax: "type PluginKind = 'source' | 'stream' | 'engine' | 'storage' | 'component'",
+    syntax:
+      "type PluginKind = 'source' | 'stream' | 'engine' | 'storage' | 'component'",
   },
   {
     name: "SourcePlugin",
@@ -157,7 +165,8 @@ const SURFACE: Entry[] = [
       "Install same-origin /plugins/axis-pine-agent.js (or remote GET /plugin/axis-pine-agent.js). " +
       "Config: endpoint (agent origin, no trailing slash), apiKey, pineVersion (auto|v5|v6), style (auto|indicator|strategy|library). " +
       "API: POST /v1/chat. Standalone Workers AI™ is enough; pyne-worker validate is optional.",
-    syntax: "POST /v1/chat  { message, pine_version, style, validate, max_retries }",
+    syntax:
+      "POST /v1/chat  { message, pine_version, style, validate, max_retries }",
     remarks:
       "Auth: X-API-Key or Authorization: Bearer when API_KEY is set. " +
       "Insert via api.insertScript or copy the fenced pine block into the editor, then Run.",
@@ -243,7 +252,7 @@ async function main() {
   if (!sections) {
     console.error(
       "Need ../axis/docs or knowledge/axis-llm.txt to build the AXIS KB.\n" +
-        "Place the pack, or clone the sister repo next to this worker."
+        "Place the pack, or clone the sister repo next to this worker.",
     );
     process.exit(2);
     return;
@@ -258,13 +267,15 @@ async function main() {
       cloudflare: "Cloudflare®",
       updated: new Date().toISOString().slice(0, 10),
       namespace: "pynescript.axis.plugins.v1",
-      source: (await stat(SISTER).catch(() => null)) ? "../axis/docs" : "knowledge/axis-llm.txt",
+      source: (await stat(SISTER).catch(() => null))
+        ? "../axis/docs"
+        : "knowledge/axis-llm.txt",
       redistributable: true,
       license: "AGPL-3.0-only",
       note: "HOOX first-party AXIS PWA knowledge. Operator-staged; do not treat as TradingView® content.",
     },
     ...Object.fromEntries(
-      Object.entries(sections).filter(([, s]) => s.docs.length)
+      Object.entries(sections).filter(([, s]) => s.docs.length),
     ),
   };
   await writeFile(OUT, JSON.stringify(payload, null, 2) + "\n");
