@@ -31,36 +31,56 @@ OKF_CMD='okn --no-telemetry validate --spec 0.2 okf'
 # /oo:commands
 # No linter detected; add a `lint` script or edit LINT_CMD.
 
-# Scope format and lint to what this commit actually adds. The generated hook
-# runs this same script, so a whole-tree check gates a commit on debt that
-# predates it. A staged-set check still fails on badly formatted work that is
-# being committed. Outside a hook, or with nothing staged, the full-tree command
-# above is used unchanged.
+# Scope format and lint to what this commit or push actually changes. The
+# generated hooks run this same script, so a whole-tree check gates a commit or
+# a push on debt that predates it. A scoped check still fails on badly formatted
+# work that is inside the change.
 #
-# The staged set is only appended to a direct tool invocation: a file list after
+#   pre-commit  git diff --cached --name-only
+#   pre-push    each range in OO_PUSH_RANGES (base..head, space separated),
+#               set by .githooks/pre-push
+#
+# Outside a hook, or with no range to scope to, the full-tree command above is
+# used unchanged. A range that changes no matching file skips the step instead
+# of falling back to the whole tree.
+#
+# The file list is only appended to a direct tool invocation: a file list after
 # a script wrapper (npm run lint) is silently ignored, which would pass without
-# checking anything. An empty STAGED_CMD keeps the full-tree command.
+# checking anything. An empty *_FILES_CMD keeps the full-tree command.
 FORMAT_EXT='js|jsx|ts|tsx|mjs|cjs|json|jsonc|md|mdx|css|scss|html|yml|yaml'
 LINT_EXT='js|jsx|ts|tsx|mjs|cjs|json|jsonc|md|mdx|css|scss|html|yml|yaml'
-FORMAT_STAGED='bun fmt --check'
-LINT_STAGED=''
-STAGED=''
-if [ "$MODE" = "pre-commit" ]; then
-  STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
-fi
-scope_to_staged() {
-  local base="$1" staged_cmd="$2" ext="$3" files
-  [ -n "$staged_cmd" ] || { printf '%s' "$base"; return; }
-  [ -n "$STAGED" ] || { printf '%s' "$base"; return; }
-  files="$(printf '%s\n' "$STAGED" | grep -Ei "\.($ext)\$" || true)"
+FORMAT_FILES_CMD='bun fmt --check'
+LINT_FILES_CMD=''
+CHANGED=''
+SCOPED=0
+case "$MODE" in
+  pre-commit)
+    CHANGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+    SCOPED=1
+    ;;
+  pre-push)
+    if [ -n "${OO_PUSH_RANGES:-}" ]; then
+      SCOPED=1
+      for range in $OO_PUSH_RANGES; do
+        CHANGED="${CHANGED}$(git diff --name-only --diff-filter=ACMR "$range" || true)"$'\n'
+      done
+      CHANGED="$(printf '%s' "$CHANGED" | sed '/^$/d' | sort -u)"
+    fi
+    ;;
+esac
+scope_to_changed() {
+  local base="$1" files_cmd="$2" ext="$3" files
+  [ "$SCOPED" = 1 ] || { printf '%s' "$base"; return; }
+  [ -n "$files_cmd" ] || { printf '%s' "$base"; return; }
+  files="$(printf '%s\n' "$CHANGED" | grep -Ei "\.($ext)\$" || true)"
   if [ -z "$files" ]; then
-    printf 'echo "no staged files match .%s; nothing to check"' "$ext"
+    printf 'echo "no changed files match .%s; nothing to check"' "$ext"
     return
   fi
-  printf '%s %s' "$staged_cmd" "$(printf '%s' "$files" | tr '\n' ' ')"
+  printf '%s %s' "$files_cmd" "$(printf '%s' "$files" | tr '\n' ' ')"
 }
-FORMAT_CMD="$(scope_to_staged "$FORMAT_CMD" "$FORMAT_STAGED" "$FORMAT_EXT")"
-LINT_CMD="$(scope_to_staged "$LINT_CMD" "$LINT_STAGED" "$LINT_EXT")"
+FORMAT_CMD="$(scope_to_changed "$FORMAT_CMD" "$FORMAT_FILES_CMD" "$FORMAT_EXT")"
+LINT_CMD="$(scope_to_changed "$LINT_CMD" "$LINT_FILES_CMD" "$LINT_EXT")"
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
   BOLD=$'\033[1m'
