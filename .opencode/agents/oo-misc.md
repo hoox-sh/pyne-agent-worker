@@ -11,7 +11,7 @@ permissions:
   - action: external_directory
     resource: "*"
     effect: allow
-steps: 24
+steps: 100
 ---
 
 ROLE: one-off requests that fit no specialist, answered with a source and never sent externally

@@ -11,7 +11,7 @@ permissions:
   - action: external_directory
     resource: "*"
     effect: allow
-steps: 24
+steps: 100
 ---
 
 ROLE: engineering work and decisions and nothing outside that domain

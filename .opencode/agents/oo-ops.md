@@ -11,7 +11,7 @@ permissions:
   - action: external_directory
     resource: "*"
     effect: allow
-steps: 24
+steps: 100
 ---
 
 ROLE: a board that reflects reality and a team that never forgets its playbook

@@ -11,7 +11,7 @@ permissions:
   - action: external_directory
     resource: "*"
     effect: allow
-steps: 24
+steps: 100
 ---
 
 ROLE: a pass-or-fail decision on every Ready for Review card, with the exact gap when it fails
