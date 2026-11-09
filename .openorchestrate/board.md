@@ -3,8 +3,9 @@
 > One place for work. Statuses: Todo · Working · Blocked · Ready for Review · Done.
 > Nothing is done until this file says Done.
 
-| task | owner | status | priority | proof | blockedReason | source |
-| ---- | ----- | ------ | -------- | ----- | ------------- | ------ |
+| task                                               | owner  | status           | priority | proof | blockedReason | source |
+| -------------------------------------------------- | ------ | ---------------- | -------- | ----- | ------------- | ------ |
+| Raise OpenOrchestrate maturity to L7 (daily clock) | oo-ops | Ready for Review |          |       |               |        |
 
 ## Rules
 
