@@ -3,7 +3,7 @@
   "project": {
     "id": "pyne-agent-worker",
     "name": "pyne-agent-worker",
-    "description": "Cloudflare\u00ae Agents SDK + Workers AI\u2122 NL\u2192PYNE (Pine Script\u2122 v6) agent with Vectorize/AI Search RAG, MCP, and AXIS plugin.",
+    "description": "Cloudflare® Agents SDK + Workers AI™ NL→PYNE (Pine Script™ v6) agent with Vectorize/AI Search RAG, MCP, and AXIS plugin.",
     "kind": "project",
     "languages": ["TypeScript", "JavaScript", "SQL", "Shell", "Python"],
     "packageManager": "bun",
