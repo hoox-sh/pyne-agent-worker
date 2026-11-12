@@ -170,11 +170,11 @@ export async function authorizeRequest(
     if (v.ok) {
       // Additive metering context: hash-on-wire handle + idem shard.
       // Raw key never leaves this scope and is never logged.
-      let keyHash = "";
+      let keyHash: string | undefined;
       try {
         keyHash = await sha256Hex(got);
       } catch {
-        keyHash = "";
+        keyHash = undefined;
       }
       return {
         ok: true,

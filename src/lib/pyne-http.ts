@@ -50,7 +50,7 @@ export async function pynePostJson(opts: {
     const fetchImpl = opts.fetchImpl || fetch;
     res = await fetchImpl(url, init);
   }
-  let data: Record<string, unknown> = {};
+  let data: Record<string, unknown>;
   try {
     data = (await res.json()) as Record<string, unknown>;
   } catch {

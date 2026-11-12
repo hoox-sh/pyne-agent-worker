@@ -1,7 +1,7 @@
 // Copyright (c) 2026 HOOX · PYNE · jango-blockchained
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { generateText, stepCountIs } from "ai";
+import { generateText, stepCountIs, type ToolSet } from "ai";
 import {
   type SpecialistRole,
   isUrlModelId,
@@ -168,13 +168,10 @@ export async function runSpecialist(
       .join("\n");
 
     const result = await generateText({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      model: model as any,
+      model,
       system: specialistSystemPrompt(opts.role),
       messages: [{ role: "user", content: userContent }],
-      // Role subsets differ; AI SDK ToolSet is an open index signature.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: tools as any,
+      tools: tools as unknown as ToolSet,
       stopWhen: stepCountIs(4),
       maxOutputTokens: 2048,
       temperature: 0.2,

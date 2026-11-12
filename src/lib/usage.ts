@@ -234,7 +234,7 @@ async function handleMultiStatus(
   batch: UsageEvent[],
   res: Response
 ): Promise<number> {
-  let body: unknown = null;
+  let body: unknown;
   try {
     body = await res.json();
   } catch {

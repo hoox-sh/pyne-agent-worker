@@ -95,8 +95,7 @@ export async function runAgenticChat(
       model: opts.model,
     });
     const result = await generateText({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      model: model as any,
+      model,
       system: opts.system,
       messages: opts.messages.map((m) => ({
         role: m.role as "system" | "user" | "assistant",
